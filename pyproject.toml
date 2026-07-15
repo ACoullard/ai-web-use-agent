@@ -8,10 +8,17 @@ dependencies = [
     "playwright>=1.45",
     "pydantic>=2.7",
     "pydantic-ai-slim[anthropic]>=0.0.20",
+    "typer>=0.12",
 ]
+
+[project.scripts]
+webagent = "webagent.cli:app"
 
 [dependency-groups]
 dev = ["pytest>=8"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+
+[tool.uv]
+package = true

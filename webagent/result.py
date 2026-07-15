@@ -11,7 +11,7 @@ class AgentResult(BaseModel):
     (step history) on top of this same type.
     """
 
-    status: Literal["success", "validation_failed", "max_steps_exceeded"]
+    status: Literal["success", "validation_failed", "max_steps_exceeded", "dry_run"]
     answer: Any = None
     error: str | None = None
     attempts: int | None = None

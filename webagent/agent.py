@@ -4,12 +4,13 @@ import json
 import logging
 from typing import Any
 
+from playwright.async_api import Error as PlaywrightError
 from pydantic import TypeAdapter
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelResponse, NativeToolCallPart, ToolCallPart
 
 from webagent.actions import resolve_action_type
-from webagent.browser import BrowserController
+from webagent.browser import BrowserController, ElementNotFoundError
 from webagent.output_spec import generic_answer_model, json_schema_to_model, self_check
 from webagent.page_snapshot import PageSnapshot
 from webagent.result import AgentResult
@@ -79,6 +80,7 @@ async def run_task(
     max_steps: int = 25,
     max_reask_attempts: int = 2,
     headless: bool = True,
+    dry_run: bool = False,
 ) -> AgentResult:
     if output_schema is not None and output_description is not None:
         raise ValueError("Pass at most one of output_schema, output_description")
@@ -94,12 +96,26 @@ async def run_task(
         answer_model = generic_answer_model()
         answer_instructions = _DESCRIPTION_ANSWER_INSTRUCTIONS.format(description=output_description)
 
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(task=task, answer_instructions=answer_instructions)
+
+    if dry_run:
+        browser = await BrowserController.launch(headless=headless)
+        try:
+            await browser.goto(url)
+            observation = await browser.observe()
+        finally:
+            await browser.close()
+        return AgentResult(
+            status="dry_run",
+            answer={"system_prompt": system_prompt, "observation_prompt": observation.to_prompt()},
+        )
+
     action_type = resolve_action_type(answer_model)
 
     agent: Agent[None, Any] = Agent(
         model,
         output_type=action_type,
-        system_prompt=SYSTEM_PROMPT_TEMPLATE.format(task=task, answer_instructions=answer_instructions),
+        system_prompt=system_prompt,
         model_settings={"thinking": "medium"},
         retries={"tools": 1, "output": max_reask_attempts},
     )
@@ -178,7 +194,20 @@ async def run_task(
                 )
                 continue  # a reask attempt doesn't consume a browsing step
 
-            await browser.execute(action)
+            try:
+                await browser.execute(action)
+            except ElementNotFoundError as e:
+                logger.warning("step %d action %r failed: %s", step, action, e)
+                pending_reask_note = (
+                    f"Your last action ({action!r}) failed: {e} "
+                    "The index you used no longer refers to anything - re-check the "
+                    "observation below before trying again."
+                )
+            except PlaywrightError as e:
+                logger.warning("step %d action %r failed: %s", step, action, e)
+                pending_reask_note = (
+                    f"Your last action ({action!r}) failed: {e}."
+                )
             step += 1
         logger.warning("max_steps_exceeded after %d steps", max_steps)
         return AgentResult(status="max_steps_exceeded")
