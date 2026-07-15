@@ -12,12 +12,23 @@ def _configure_logging() -> None:
 
 
 async def _main() -> None:
-    answer = await run_task(
+    result = await run_task(
         # task="Find and click the link to the Python documentation, then report the URL of the page you land on.",
-        task="How can I sign up for the python newsletter via RSS feed?",
+        task="Find all open remote job listings on the Python.org website including links to the postings, and return them as a JSON array of objects with 'title' and 'url' fields.",
         url="https://www.python.org",
+        output_schema={
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "url": {"type": "string", "format": "uri"}
+                },
+                "required": ["title", "url"]
+            }
+        },
     )
-    print(answer)
+    print(result)
 
 
 def main() -> None:

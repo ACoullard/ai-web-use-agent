@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import json
 import logging
+from typing import Any
 
+from pydantic import TypeAdapter
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage, ModelResponse, NativeToolCallPart, ToolCallPart
 
-from webagent.actions import Action, FinishAction, PageSnapshot
+from webagent.actions import resolve_action_type
 from webagent.browser import BrowserController
+from webagent.output_spec import generic_answer_model, json_schema_to_model, self_check
+from webagent.page_snapshot import PageSnapshot
+from webagent.result import AgentResult
 
 logger = logging.getLogger(__name__)
 
@@ -29,17 +35,24 @@ On each turn, respond with exactly one action:
 
 Only refer to element indices that appear in the most recent observation - they change every step.
 Call finish() as soon as you have the answer; do not keep browsing after you know the answer.
+{answer_instructions}\
+"""
+
+_SCHEMA_ANSWER_INSTRUCTIONS = """
+Your finish() answer must be a JSON object matching this schema:
+{schema}
+"""
+
+_DESCRIPTION_ANSWER_INSTRUCTIONS = """
+Your finish() answer must be a JSON object of the form {{"result": ...}}, where the
+value of "result" satisfies this description: {description}
 """
 
 
 def _format_elements(observation: PageSnapshot) -> str:
     if not observation.elements:
         return "(none found)"
-    lines = []
-    for el in observation.elements:
-        role_part = f" role={el.role}" if el.role else ""
-        lines.append(f"[{el.index}] <{el.tag}>{role_part} {el.name!r}")
-    return "\n".join(lines)
+    return "\n".join(el.to_prompt_line() for el in observation.elements)
 
 
 def _truncate(text: str, max_chars: int) -> str:
@@ -60,22 +73,45 @@ def _log_model_response(response: ModelResponse) -> None:
 async def run_task(
     task: str,
     url: str,
+    output_schema: dict[str, Any] | None = None,
+    output_description: str | None = None,
     model: str = "anthropic:claude-sonnet-5",
     max_steps: int = 25,
+    max_reask_attempts: int = 2,
     headless: bool = True,
-) -> str:
-    agent: Agent[None, Action] = Agent(
+) -> AgentResult:
+    if output_schema is not None and output_description is not None:
+        raise ValueError("Pass at most one of output_schema, output_description")
+
+    answer_model: Any = None
+    answer_adapter: TypeAdapter[Any] | None = None
+    answer_instructions = ""
+    if output_schema is not None:
+        answer_model = json_schema_to_model(output_schema)
+        answer_adapter = TypeAdapter(answer_model)
+        answer_instructions = _SCHEMA_ANSWER_INSTRUCTIONS.format(schema=json.dumps(output_schema))
+    elif output_description is not None:
+        answer_model = generic_answer_model()
+        answer_instructions = _DESCRIPTION_ANSWER_INSTRUCTIONS.format(description=output_description)
+
+    action_type = resolve_action_type(answer_model)
+
+    agent: Agent[None, Any] = Agent(
         model,
-        output_type=Action,
-        system_prompt=SYSTEM_PROMPT_TEMPLATE.format(task=task),
+        output_type=action_type,
+        system_prompt=SYSTEM_PROMPT_TEMPLATE.format(task=task, answer_instructions=answer_instructions),
         model_settings={"thinking": "medium"},
+        retries={"tools": 1, "output": max_reask_attempts},
     )
 
     browser = await BrowserController.launch(headless=headless)
     message_history: list[ModelMessage] | None = None
+    reask_attempts_used = 0
+    pending_reask_note: str | None = None
     try:
         await browser.goto(url)
-        for step in range(max_steps):
+        step = 0
+        while step < max_steps:
             observation = await browser.observe()
             logger.info("step %d elements:\n%s", step, _format_elements(observation))
             logger.info(
@@ -84,18 +120,67 @@ async def run_task(
                 _truncate(observation.text_summary, _SUMMARY_PREVIEW_CHARS),
             )
             logger.debug("step %d full observation:\n%s", step, observation.to_prompt())
-            result = await agent.run(observation.to_prompt(), message_history=message_history)
+
+            prompt = observation.to_prompt()
+            if pending_reask_note is not None:
+                prompt = f"{pending_reask_note}\n\n{prompt}"
+                pending_reask_note = None
+
+            result = await agent.run(prompt, message_history=message_history)
             for message in result.new_messages():
                 if isinstance(message, ModelResponse):
                     _log_model_response(message)
             message_history = result.new_messages()
             action = result.output
             logger.info("step %d action: %r", step, action)
-            if isinstance(action, FinishAction):
-                logger.info("finished after %d steps: %s", step + 1, action.answer)
-                return action.answer
+
+            if action.type == "finish":
+                if answer_model is None:
+                    logger.info("finished after %d steps: %s", step + 1, action.answer)
+                    return AgentResult(status="success", answer=action.answer)
+
+                if output_schema is not None:
+                    logger.info("finished after %d steps with schema-validated answer", step + 1)
+                    return AgentResult(
+                        status="success",
+                        answer=answer_adapter.dump_python(action.answer, mode="json"),
+                    )
+
+                # output_description mode: structurally valid ({"result": ...}), but
+                # still needs a semantic self-check against the caller's description.
+                verdict = await self_check(task, output_description, action.answer.result, model)
+                if verdict.passes:
+                    logger.info("finished after %d steps, self-check passed", step + 1)
+                    return AgentResult(status="success", answer=action.answer.model_dump())
+
+                if reask_attempts_used >= max_reask_attempts:
+                    logger.warning(
+                        "output validation failed after %d reask attempt(s): %s",
+                        reask_attempts_used,
+                        verdict.reason,
+                    )
+                    return AgentResult(
+                        status="validation_failed",
+                        error=verdict.reason,
+                        attempts=reask_attempts_used,
+                    )
+
+                reask_attempts_used += 1
+                logger.info(
+                    "self-check failed (attempt %d/%d): %s",
+                    reask_attempts_used,
+                    max_reask_attempts,
+                    verdict.reason,
+                )
+                pending_reask_note = (
+                    f"Your finish() answer did not satisfy the task: {verdict.reason}. "
+                    "Please reconsider and call finish() again."
+                )
+                continue  # a reask attempt doesn't consume a browsing step
+
             await browser.execute(action)
+            step += 1
         logger.warning("max_steps_exceeded after %d steps", max_steps)
-        return "max_steps_exceeded"
+        return AgentResult(status="max_steps_exceeded")
     finally:
         await browser.close()

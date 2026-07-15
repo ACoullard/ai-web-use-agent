@@ -9,3 +9,9 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-ai-slim[anthropic]>=0.0.20",
 ]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

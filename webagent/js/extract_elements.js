@@ -42,14 +42,31 @@
     if (!isVisible(el)) continue;
     index += 1;
     el.setAttribute('data-webagent-index', String(index));
+    const tag = el.tagName.toLowerCase();
     elements.push({
       index,
-      tag: el.tagName.toLowerCase(),
+      tag,
       role: el.getAttribute('role') || null,
       name: accessibleName(el),
       value: 'value' in el ? (el.value || null) : null,
+      // el.href resolves to an absolute URL; the raw attribute may be relative.
+      href: tag === 'a' && el.href ? el.href : null,
+      options: tag === 'select'
+        ? Array.from(el.options).map((o) => ({ value: o.value, label: o.text.trim() }))
+        : null,
     });
   }
+
+  // Feed/canonical links live in <head>, not among interactive elements - e.g. RSS
+  // autodiscovery (<link rel="alternate" type="application/rss+xml">) has no
+  // visible clickable affordance at all.
+  const headLinks = Array.from(document.querySelectorAll('link[rel="alternate"], link[rel="canonical"]'))
+    .map((l) => ({
+      rel: l.getAttribute('rel'),
+      type: l.getAttribute('type') || null,
+      href: l.href || null,
+      title: l.getAttribute('title') || null,
+    }));
 
   const bodyText = document.body ? document.body.innerText.trim().slice(0, 2000) : '';
 
@@ -57,6 +74,7 @@
     title: document.title,
     url: window.location.href,
     elements,
+    head_links: headLinks,
     text_summary: bodyText,
   };
 })();

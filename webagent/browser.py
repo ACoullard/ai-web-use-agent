@@ -6,16 +6,15 @@ from pathlib import Path
 from playwright.async_api import Browser, Page, Playwright, async_playwright
 
 from webagent.actions import (
-    Action,
+    BrowserAction,
     ClickAction,
-    FinishAction,
     GoBackAction,
     NavigateAction,
-    PageSnapshot,
     ScrollAction,
     SelectAction,
     TypeAction,
 )
+from webagent.page_snapshot import PageSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +41,7 @@ class BrowserController:
         result = await self._page.evaluate(_EXTRACT_JS)
         return PageSnapshot.model_validate(result)
 
-    async def execute(self, action: Action) -> None:
+    async def execute(self, action: BrowserAction) -> None:
         logger.debug("executing action: %r", action)
         if isinstance(action, ClickAction):
             await self._locator(action.index).click()
@@ -57,8 +56,6 @@ class BrowserController:
             await self._page.goto(action.url)
         elif isinstance(action, GoBackAction):
             await self._page.go_back()
-        elif isinstance(action, FinishAction):
-            raise ValueError("FinishAction should be handled by the agent loop, not executed")
         else:
             raise TypeError(f"Unknown action type: {action!r}")
 
