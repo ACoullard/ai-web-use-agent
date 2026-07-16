@@ -31,8 +31,8 @@
     return text.trim().slice(0, 120);
   }
 
-  // Clear markers from any previous observation before reassigning.
-  document.querySelectorAll('[data-webagent-index]').forEach((el) => el.removeAttribute('data-webagent-index'));
+  // Reset the live element cache from any previous observation before reassigning.
+  window.__webagentElements = [];
 
   const elements = [];
   let index = 0;
@@ -41,7 +41,7 @@
     if (!isInteractive(el)) continue;
     if (!isVisible(el)) continue;
     index += 1;
-    el.setAttribute('data-webagent-index', String(index));
+    window.__webagentElements[index] = el;
     const tag = el.tagName.toLowerCase();
     elements.push({
       index,
