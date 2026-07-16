@@ -44,6 +44,7 @@ class PageSnapshot(BaseModel):
     elements: list[ElementInfo]
     head_links: list[HeadLink] = []
     text_summary: str
+    text_total_length: int = 0
 
     def to_prompt(self) -> str:
         lines = [f"Page title: {self.title}", f"URL: {self.url}", "", "Interactive elements:"]
@@ -60,4 +61,10 @@ class PageSnapshot(BaseModel):
         lines.append("")
         lines.append("Page text summary:")
         lines.append(self.text_summary or "(empty)")
+        hidden_chars = self.text_total_length - len(self.text_summary)
+        if hidden_chars > 0:
+            lines.append(
+                f"[{hidden_chars} more character(s) not shown. If more info is needed, use search_page_text(query) to find "
+                "specific text, or read_more_text() to keep reading sequentially.]"
+            )
         return "\n".join(lines)

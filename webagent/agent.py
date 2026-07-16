@@ -32,6 +32,10 @@ On each turn, respond with exactly one action:
 - scroll(direction): scroll "up" or "down"
 - navigate(url): go directly to a URL
 - go_back(): return to the previous page
+- search_page_text(query): search the page's full text for a keyword/phrase when the
+  text summary was truncated and you need one specific fact
+- read_more_text(): keep reading the page's full text sequentially, continuing from
+  where the summary or the last read_more_text() call left off
 - finish(answer): call this once you have completed the task, with your final answer
 
 Only refer to element indices that appear in the most recent observation - they change every step.
@@ -195,7 +199,9 @@ async def run_task(
                 continue  # a reask attempt doesn't consume a browsing step
 
             try:
-                await browser.execute(action)
+                action_result = await browser.execute(action)
+                if action_result is not None:
+                    pending_reask_note = action_result
             except ElementNotFoundError as e:
                 logger.warning("step %d action %r failed: %s", step, action, e)
                 pending_reask_note = (

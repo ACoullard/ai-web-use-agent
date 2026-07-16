@@ -1,4 +1,4 @@
-(() => {
+(maxSummaryChars) => {
   const interactiveTags = new Set(['a', 'button', 'input', 'select', 'textarea']);
   const interactiveRoles = new Set([
     'button', 'link', 'checkbox', 'radio', 'tab', 'menuitem', 'option', 'switch', 'textbox',
@@ -73,7 +73,8 @@
       title: l.getAttribute('title') || null,
     }));
 
-  const bodyText = document.body ? document.body.innerText.trim().slice(0, 2000) : '';
+  const fullBodyText = document.body ? document.body.innerText.trim() : '';
+  const bodyText = fullBodyText.slice(0, maxSummaryChars);
 
   return {
     title: document.title,
@@ -81,5 +82,6 @@
     elements,
     head_links: headLinks,
     text_summary: bodyText,
+    text_total_length: fullBodyText.length,
   };
-})();
+}

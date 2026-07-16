@@ -62,12 +62,42 @@ class ScrollAction(BaseModel):
 
     Note: the 'Interactive elements' list already includes elements anywhere on the
     page, not just what's currently in the viewport, so scrolling is rarely needed
-    just to make an element clickable by index. It's mainly useful for reading further
-    into the page's text summary or triggering content that lazy-loads on scroll.
+    just to make an element clickable by index. It's mainly useful for triggering
+    content that lazy-loads on scroll. To read more of the page's text, use
+    `search_page_text` or `read_more_text` instead - scrolling does not reveal more text.
     """
 
     type: Literal["scroll"] = "scroll"
     direction: Literal["up", "down"] = Field(description="Which direction to scroll.")
+
+
+class SearchPageTextAction(BaseModel):
+    """Search the full page text for a keyword or phrase.
+
+    Use this when you need one specific fact from a page whose text summary was
+    truncated, rather than reading through it sequentially. Returns matching snippets
+    with surrounding context, not the whole page. Separate multiple terms with `|` to
+    match any of them, e.g. 'cat|dog' matches text containing either "cat" or "dog".
+    """
+
+    type: Literal["search_page_text"] = "search_page_text"
+    query: str = Field(
+        description=(
+            "The keyword or phrase to search for in the page's full text. Separate "
+            "multiple terms with `|` for an OR search, e.g. 'cat|dog'."
+        )
+    )
+
+
+class ReadMoreTextAction(BaseModel):
+    """Continue reading the page's full text sequentially from where the last
+    summary or read_more_text call left off.
+
+    Use this when you need to read a long page top-to-bottom rather than search for
+    one specific fact.
+    """
+
+    type: Literal["read_more_text"] = "read_more_text"
 
 
 class NavigateAction(BaseModel):
@@ -104,7 +134,16 @@ class FinishAction(BaseModel):
     answer: str = Field(description="The final answer to the task, as plain text.")
 
 
-_BROWSER_ACTION_TYPES = (ClickAction, TypeAction, SelectAction, ScrollAction, NavigateAction, GoBackAction)
+_BROWSER_ACTION_TYPES = (
+    ClickAction,
+    TypeAction,
+    SelectAction,
+    ScrollAction,
+    NavigateAction,
+    GoBackAction,
+    SearchPageTextAction,
+    ReadMoreTextAction,
+)
 
 BrowserAction = Annotated[Union[_BROWSER_ACTION_TYPES], Field(discriminator="type")]
 

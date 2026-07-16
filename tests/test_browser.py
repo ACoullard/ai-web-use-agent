@@ -3,8 +3,8 @@ from contextlib import asynccontextmanager
 
 import pytest
 
-from webagent.actions import ClickAction, TypeAction
-from webagent.browser import BrowserController, ElementNotFoundError
+from webagent.actions import ClickAction, ReadMoreTextAction, SearchPageTextAction, TypeAction
+from webagent.browser import TEXT_SUMMARY_CHARS, BrowserController, ElementNotFoundError
 
 
 @asynccontextmanager
@@ -124,5 +124,103 @@ def test_type_action_roundtrip(tmp_path):
             await browser.execute(TypeAction(index=_input_index(observation), text="hello"))
             value = await browser._page.eval_on_selector("input", "el => el.value")
             assert value == "hello"
+
+    asyncio.run(_test())
+
+
+def _long_text_html(total_chars: int) -> str:
+    body = "".join(f"word{i} " for i in range(total_chars // 7 + 1))[:total_chars]
+    return f"<body>{body}</body>"
+
+
+def test_observe_reports_truncated_text_total_length(tmp_path):
+    async def _test():
+        async with _launched_browser() as browser:
+            html_path = tmp_path / "long.html"
+            html_path.write_text(_long_text_html(TEXT_SUMMARY_CHARS + 500))
+            await browser.goto(html_path.as_uri())
+            observation = await browser.observe()
+            assert len(observation.text_summary) == TEXT_SUMMARY_CHARS
+            assert observation.text_total_length >= TEXT_SUMMARY_CHARS + 500
+            assert "more character" in observation.to_prompt()
+
+    asyncio.run(_test())
+
+
+def test_search_page_text_finds_match_with_context(tmp_path):
+    async def _test():
+        async with _launched_browser() as browser:
+            html_path = tmp_path / "search.html"
+            html_path.write_text(_long_text_html(TEXT_SUMMARY_CHARS + 500) + "<p>needle-phrase found here</p>")
+            await browser.goto(html_path.as_uri())
+            await browser.observe()
+            result = await browser.execute(SearchPageTextAction(query="needle-phrase"))
+            assert "needle-phrase found here" in result
+
+            miss = await browser.execute(SearchPageTextAction(query="not-present-anywhere"))
+            assert "No matches" in miss
+
+    asyncio.run(_test())
+
+
+def test_search_page_text_supports_or_query(tmp_path):
+    async def _test():
+        async with _launched_browser() as browser:
+            html_path = tmp_path / "search_or.html"
+            filler = "filler " * 100  # keeps the two markers' context windows from overlapping
+            html_path.write_text(f"<p>alpha-marker here</p><p>{filler}</p><p>beta-marker here too</p>")
+            await browser.goto(html_path.as_uri())
+            await browser.observe()
+
+            result = await browser.execute(SearchPageTextAction(query="alpha-marker|beta-marker"))
+            assert "2 match(es)" in result
+            assert "alpha-marker" in result
+            assert "beta-marker" in result
+
+            miss = await browser.execute(SearchPageTextAction(query="nope-1|nope-2"))
+            assert "No matches" in miss
+
+    asyncio.run(_test())
+
+
+def test_search_page_text_merges_nearby_or_matches_into_one_snippet(tmp_path):
+    async def _test():
+        async with _launched_browser() as browser:
+            html_path = tmp_path / "search_or_nearby.html"
+            # alpha-marker and beta-marker sit well within one another's context
+            # window, so this must produce a single merged snippet, not two
+            # overlapping/duplicate ones.
+            html_path.write_text("<p>alpha-marker close to beta-marker here</p>")
+            await browser.goto(html_path.as_uri())
+            await browser.observe()
+
+            result = await browser.execute(SearchPageTextAction(query="alpha-marker|beta-marker"))
+            header, _, body = result.partition("\n\n")
+            assert "1 match(es)" in header
+            assert body.count("alpha-marker") == 1
+            assert body.count("beta-marker") == 1
+
+    asyncio.run(_test())
+
+
+def test_read_more_text_paginates_and_resets_on_navigation(tmp_path):
+    async def _test():
+        async with _launched_browser() as browser:
+            html_path = tmp_path / "read_more.html"
+            html_path.write_text(_long_text_html(TEXT_SUMMARY_CHARS * 3))
+            await browser.goto(html_path.as_uri())
+            await browser.observe()
+
+            first_chunk = await browser.execute(ReadMoreTextAction())
+            assert len(first_chunk) == TEXT_SUMMARY_CHARS
+            second_chunk = await browser.execute(ReadMoreTextAction())
+            assert second_chunk != first_chunk
+
+            other_path = tmp_path / "other.html"
+            other_path.write_text("<body>short page</body>")
+            await browser.goto(other_path.as_uri())
+            await browser.observe()
+            reset_chunk = await browser.execute(ReadMoreTextAction())
+            assert "No more text remaining" in reset_chunk
 
     asyncio.run(_test())
