@@ -97,6 +97,23 @@ def test_click_raises_when_node_replaced(tmp_path):
     asyncio.run(_test())
 
 
+def test_observe_excludes_inert_and_aria_hidden_elements(tmp_path):
+    async def _test():
+        async with _launched_browser() as browser:
+            html_path = tmp_path / "suppressed.html"
+            html_path.write_text(
+                "<button id='visible'>Visible</button>"
+                "<button id='inert-btn' inert>Inert</button>"
+                "<div aria-hidden='true'><button id='hidden-btn'>Hidden</button></div>"
+            )
+            await browser.goto(html_path.as_uri())
+            observation = await browser.observe()
+            names = {el.name for el in observation.elements}
+            assert names == {"Visible"}
+
+    asyncio.run(_test())
+
+
 def test_type_action_roundtrip(tmp_path):
     async def _test():
         async with _launched_browser() as browser:

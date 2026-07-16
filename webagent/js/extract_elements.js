@@ -23,6 +23,10 @@
     return false;
   }
 
+  function isSuppressed(el) {
+    return el.closest('[aria-hidden="true"], [inert]') !== null;
+  }
+
   function accessibleName(el) {
     const aria = el.getAttribute('aria-label');
     if (aria) return aria.trim();
@@ -40,6 +44,7 @@
   for (const el of all) {
     if (!isInteractive(el)) continue;
     if (!isVisible(el)) continue;
+    if (isSuppressed(el)) continue;
     index += 1;
     window.__webagentElements[index] = el;
     const tag = el.tagName.toLowerCase();
