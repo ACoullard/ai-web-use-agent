@@ -10,7 +10,7 @@ from evals.grading import grade_fixture
 from evals.history import RunRecord
 from evals.models import Fixture
 from webagent.agent import run_task
-from webagent.providers import check_model_config
+from webagent.providers import DEFAULT_THINKING, check_model_config, resolve_thinking
 
 
 async def run_fixture(
@@ -18,7 +18,7 @@ async def run_fixture(
     *,
     model: str,
     judge_model: str,
-    thinking: str | bool = "medium",
+    thinking: str | bool = resolve_thinking(DEFAULT_THINKING),
     headless: bool,
     run_id: str,
 ) -> RunRecord:
@@ -82,7 +82,7 @@ async def run_suite(
     *,
     model: str,
     judge_model: str,
-    thinking: str | bool = "medium",
+    thinking: str | bool = resolve_thinking(DEFAULT_THINKING),
     concurrency: int = 1,
     headless: bool = True,
     on_complete: Callable[[RunRecord], None] | None = None,

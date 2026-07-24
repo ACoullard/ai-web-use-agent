@@ -13,7 +13,13 @@ import typer
 
 from evals.cli import evals_app
 from webagent.agent import run_task
-from webagent.providers import ProviderConfigError, ThinkingLevel, resolve_thinking
+from webagent.providers import (
+    DEFAULT_MODEL,
+    DEFAULT_THINKING,
+    ProviderConfigError,
+    ThinkingLevel,
+    resolve_thinking,
+)
 from webagent.result import AgentResult
 
 # Scraped page text can contain arbitrary Unicode; the default console codepage
@@ -90,12 +96,12 @@ def run(
         "Mutually exclusive with --schema.",
     ),
     model: str = typer.Option(
-        "anthropic:claude-sonnet-5",
+        DEFAULT_MODEL,
         "--model",
         help='Model identifier passed to Pydantic AI, e.g. "anthropic:claude-sonnet-5" or "openai:gpt-4o".',
     ),
     thinking: ThinkingLevel = typer.Option(
-        ThinkingLevel.MEDIUM,
+        DEFAULT_THINKING,
         "--thinking",
         help="Reasoning/thinking effort. Honored by reasoning models (e.g. Anthropic, OpenAI "
         "reasoning models); silently ignored by models that don't support it. Use 'off' to disable.",

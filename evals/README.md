@@ -19,7 +19,7 @@ webagent evals history                               # pass-rate trend across pa
 `--model`/`--judge-model` take a Pydantic AI `"<provider>:<model>"` identifier.
 Supported providers are `anthropic` (`ANTHROPIC_API_KEY`) and `openai`
 (`OPENAI_API_KEY`) - the corresponding key must be set in the environment. `--thinking`
-(`minimal`/`low`/`medium`/`high`/`xhigh`/`off`, default `medium`) sets reasoning effort;
+(`minimal`/`low`/`medium`/`high`/`xhigh`/`off`) sets reasoning effort;
 it's honored by reasoning models and silently ignored by models that don't support it.
 
 Positional paths (files or directories) are resolved relative to `--fixtures-root`

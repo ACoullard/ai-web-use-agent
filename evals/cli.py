@@ -14,7 +14,13 @@ from evals.history import append_history, load_history, pass_rate_by_run
 from evals.loader import filter_fixtures, load_fixture_paths
 from evals.report import format_failure_section, format_progress_mark, format_summary_line
 from evals.runner import run_suite
-from webagent.providers import ProviderConfigError, ThinkingLevel, resolve_thinking
+from webagent.providers import (
+    DEFAULT_MODEL,
+    DEFAULT_THINKING,
+    ProviderConfigError,
+    ThinkingLevel,
+    resolve_thinking,
+)
 
 evals_app = typer.Typer(name="evals", help="Offline eval harness for the agent.")
 
@@ -51,12 +57,12 @@ def run(
     live: bool = typer.Option(
         False, "--live", help="Include live fixtures (real websites; excluded by default)."
     ),
-    model: str = typer.Option("anthropic:claude-sonnet-5", "--model", help="Model under test."),
+    model: str = typer.Option(DEFAULT_MODEL, "--model", help="Model under test."),
     judge_model: Optional[str] = typer.Option(
         None, "--judge-model", help="Model for llm_judge grading. Defaults to --model."
     ),
     thinking: ThinkingLevel = typer.Option(
-        ThinkingLevel.MEDIUM,
+        DEFAULT_THINKING,
         "--thinking",
         help="Reasoning/thinking effort for the model under test. Honored by reasoning models; "
         "silently ignored by models that don't support it. Use 'off' to disable.",

@@ -28,6 +28,10 @@ class ThinkingLevel(str, enum.Enum):
     OFF = "off"
 
 
+DEFAULT_THINKING: ThinkingLevel = ThinkingLevel.MEDIUM
+DEFAULT_MODEL = "anthropic:claude-sonnet-5"
+
+
 def resolve_thinking(level: ThinkingLevel) -> str | bool:
     """Map the CLI enum to Pydantic AI's unified `thinking` setting (`off` -> False)."""
     return False if level is ThinkingLevel.OFF else level.value
