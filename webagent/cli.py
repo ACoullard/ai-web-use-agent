@@ -11,6 +11,7 @@ from typing import Optional
 
 import typer
 
+from evals.cli import evals_app
 from webagent.agent import run_task
 from webagent.result import AgentResult
 
@@ -25,6 +26,7 @@ app = typer.Typer(
     help="webagent - CLI for an LLM-driven browser automation agent.",
     no_args_is_help=True,
 )
+app.add_typer(evals_app, name="evals")
 
 _EXIT_CODES = {
     "success": 0,

@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Eval run telemetry (machine/run-local, not source)
+evals/runs/

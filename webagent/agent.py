@@ -157,13 +157,14 @@ async def run_task(
             if action.type == "finish":
                 if answer_model is None:
                     logger.info("finished after %d steps: %s", step + 1, action.answer)
-                    return AgentResult(status="success", answer=action.answer)
+                    return AgentResult(status="success", answer=action.answer, steps_taken=step + 1)
 
                 if output_schema is not None:
                     logger.info("finished after %d steps with schema-validated answer", step + 1)
                     return AgentResult(
                         status="success",
                         answer=answer_adapter.dump_python(action.answer, mode="json"),
+                        steps_taken=step + 1,
                     )
 
                 # output_description mode: structurally valid ({"result": ...}), but
@@ -171,7 +172,7 @@ async def run_task(
                 verdict = await self_check(task, output_description, action.answer.result, model)
                 if verdict.passes:
                     logger.info("finished after %d steps, self-check passed", step + 1)
-                    return AgentResult(status="success", answer=action.answer.model_dump())
+                    return AgentResult(status="success", answer=action.answer.model_dump(), steps_taken=step + 1)
 
                 if reask_attempts_used >= max_reask_attempts:
                     logger.warning(
@@ -183,6 +184,7 @@ async def run_task(
                         status="validation_failed",
                         error=verdict.reason,
                         attempts=reask_attempts_used,
+                        steps_taken=step,
                     )
 
                 reask_attempts_used += 1
@@ -216,6 +218,6 @@ async def run_task(
                 )
             step += 1
         logger.warning("max_steps_exceeded after %d steps", max_steps)
-        return AgentResult(status="max_steps_exceeded")
+        return AgentResult(status="max_steps_exceeded", steps_taken=step)
     finally:
         await browser.close()
