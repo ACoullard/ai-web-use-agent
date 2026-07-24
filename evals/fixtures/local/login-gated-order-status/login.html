@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+<head><title>Account Login</title></head>
+<body>
+<h1>Log In</h1>
+<label for="username">Username</label>
+<input id="username" type="text">
+<label for="password">Password</label>
+<input id="password" type="password">
+<button onclick="
+  if (document.getElementById('username').value === 'admin' &amp;&amp; document.getElementById('password').value === 'secret') {
+    document.getElementById('status').style.display = 'inline';
+  }
+">Log in</button>
+<p>Order status: <span id="status" style="display:none">Shipped</span></p>
+</body>
+</html>

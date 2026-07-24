@@ -1,0 +1,12 @@
+id: product-count
+task: "How many products are listed in the catalog?"
+url: catalog.html
+output_schema:
+  type: object
+  properties:
+    count:
+      type: integer
+  required: [count]
+grading: exact_match
+expected:
+  count: 7

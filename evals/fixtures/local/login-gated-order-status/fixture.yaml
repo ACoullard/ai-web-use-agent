@@ -1,0 +1,12 @@
+id: login-gated-order-status
+task: "Log in with username 'admin' and password 'secret', then report the order status shown after logging in."
+url: login.html
+output_schema:
+  type: object
+  properties:
+    status:
+      type: string
+  required: [status]
+grading: exact_match
+expected:
+  status: "Shipped"

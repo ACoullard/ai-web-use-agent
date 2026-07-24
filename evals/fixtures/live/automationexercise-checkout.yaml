@@ -1,0 +1,40 @@
+id: live-automationexercise-checkout
+task: >
+  This is automationexercise.com, a public site built specifically for practicing
+  automated testing - it is not a real store, nothing you enter is real, and no
+  real payment is ever processed. Add exactly 2 different products to the shopping
+  cart, then proceed to checkout and place the order.
+
+  Checkout requires a logged-in account. If prompted to log in or register, sign up
+  for a new account. Here is your identity:
+
+  - Email: test@example.com 
+  - Name: John Doe
+  - Date of Birth: 01/01/1990
+  - Password: TestPassword123
+
+  Continue to checkout, review the order, and place it. On the payment step, enter
+  your name-on-card, card number, CVC, and expiry - this is a fake payment
+  form and nothing is charged. Confirm the order and report whether it was
+  successfully placed.
+
+  - Name on card: John L Doe
+  - Card number: 4111 1111 1111 1111
+  - CVC: 123
+  - Expiry: 12/30
+
+url: https://automationexercise.com/
+output_schema:
+  type: object
+  properties:
+    order_confirmed:
+      type: boolean
+      description: Whether the site confirmed the order was successfully placed.
+    confirmation_message:
+      type: string
+      description: The confirmation text/message shown after placing the order.
+  required: [order_confirmed, confirmation_message]
+grading: exact_match
+expected:
+  order_confirmed: true
+max_steps: 60

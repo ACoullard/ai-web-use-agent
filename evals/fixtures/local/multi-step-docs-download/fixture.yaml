@@ -1,0 +1,12 @@
+id: multi-step-docs-download
+task: "Find the download URL for the latest release (v2.3) by browsing through the documentation portal."
+url: portal.html
+output_schema:
+  type: object
+  properties:
+    download_url:
+      type: string
+  required: [download_url]
+grading: exact_match
+expected:
+  download_url: "{fixture_dir}/download-2-3.html"

@@ -1,0 +1,12 @@
+id: max-steps-guardrail
+task: "Find the discount code by following the links on this page and any subsequent pages, then report it."
+url: step-a.html
+output_schema:
+  type: object
+  properties:
+    code:
+      type: string
+  required: [code]
+grading: exact_match
+expected_status: max_steps_exceeded
+max_steps: 1

@@ -1,0 +1,12 @@
+id: pricing-page-link
+task: "Find the URL of the pricing page."
+url: home.html
+output_schema:
+  type: object
+  properties:
+    pricing_url:
+      type: string
+  required: [pricing_url]
+grading: exact_match
+expected:
+  pricing_url: "{fixture_dir}/pricing.html"

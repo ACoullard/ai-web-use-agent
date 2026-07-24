@@ -1,0 +1,7 @@
+id: boolean-in-stock
+task: "Is Widget Pro in stock? Respond with only the JSON boolean true or false - no explanation, citation, or extra text."
+url: stock.html
+output_description: "a bare JSON boolean literal (true or false) with no surrounding text - true if Widget Pro is in stock, false otherwise"
+grading: exact_match
+expected:
+  result: true

@@ -1,0 +1,12 @@
+id: go-back-recovery
+task: "This setup wizard leads to a discount code, but one path is a dead end. If you hit a dead end, go back and try a different link. Report the discount code."
+url: wizard-step1.html
+output_schema:
+  type: object
+  properties:
+    code:
+      type: string
+  required: [code]
+grading: exact_match
+expected:
+  code: "SAVE10"

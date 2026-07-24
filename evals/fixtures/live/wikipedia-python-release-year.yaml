@@ -1,0 +1,12 @@
+id: live-wikipedia-python-release-year
+task: "What year was the Python programming language first released?"
+url: https://en.wikipedia.org/wiki/Python_(programming_language)
+output_schema:
+  type: object
+  properties:
+    year:
+      type: integer
+  required: [year]
+grading: exact_match
+expected:
+  year: 1991

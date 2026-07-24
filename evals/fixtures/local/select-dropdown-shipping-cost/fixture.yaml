@@ -1,0 +1,12 @@
+id: select-dropdown-shipping-cost
+task: "Select Canada as the shipping country, then report the shipping cost shown."
+url: shipping.html
+output_schema:
+  type: object
+  properties:
+    cost:
+      type: string
+  required: [cost]
+grading: exact_match
+expected:
+  cost: "$12"

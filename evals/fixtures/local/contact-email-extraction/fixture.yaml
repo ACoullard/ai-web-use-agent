@@ -1,0 +1,12 @@
+id: contact-email-extraction
+task: "Find the support email address on this page."
+url: contact.html
+output_schema:
+  type: object
+  properties:
+    email:
+      type: string
+  required: [email]
+grading: exact_match
+expected:
+  email: "support@acme.example"

@@ -1,0 +1,9 @@
+id: open-ended-summary-judge
+task: "Summarize this article's advice in 2-3 sentences."
+url: article.html
+output_description: "a concise natural-language summary of the article's main advice"
+grading: llm_judge
+rubric:
+  - watering frequency is mentioned in the summary
+  - light or sun exposure requirements are mentioned in the summary
+  - soil or drainage advice is mentioned in the summary

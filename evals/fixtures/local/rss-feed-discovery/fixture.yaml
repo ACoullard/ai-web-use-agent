@@ -1,0 +1,12 @@
+id: rss-feed-discovery
+task: "Find the URL of this page's RSS feed."
+url: blog.html
+output_schema:
+  type: object
+  properties:
+    feed_url:
+      type: string
+  required: [feed_url]
+grading: exact_match
+expected:
+  feed_url: "{fixture_dir}/feed.xml"
