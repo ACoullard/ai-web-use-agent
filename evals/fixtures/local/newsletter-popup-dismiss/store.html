@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head><title>Widget Store</title></head>
+<body>
+<h1>Widget Store</h1>
+<p>Grab today's coupon before it expires.</p>
+<button id="reveal"
+        onclick="document.getElementById('code').textContent = 'Your coupon code is FIXTURE20';">
+  Reveal my coupon
+</button>
+<p id="code"></p>
+
+<!-- A newsletter popup covers the whole page on load. Its dismiss button sits on
+     top and stays clickable, but everything behind it (including the coupon
+     button) is covered until the popup is closed. -->
+<div id="backdrop"
+     style="position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,0.6);"></div>
+<div id="modal" role="dialog" aria-label="Newsletter signup"
+     style="position:fixed; inset:0; z-index:9001; display:flex;
+            align-items:center; justify-content:center;">
+  <div style="background:#fff; padding:24px;">
+    <h2>Join our newsletter!</h2>
+    <input type="email" placeholder="you@example.com" />
+    <button id="dismiss"
+            onclick="document.getElementById('backdrop').remove();
+                     document.getElementById('modal').remove();">
+      No thanks
+    </button>
+  </div>
+</div>
+</body>
+</html>

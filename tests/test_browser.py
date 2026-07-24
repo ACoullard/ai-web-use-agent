@@ -114,6 +114,73 @@ def test_observe_excludes_inert_and_aria_hidden_elements(tmp_path):
     asyncio.run(_test())
 
 
+def test_observe_flags_element_covered_by_overlay(tmp_path):
+    async def _test():
+        async with _launched_browser() as browser:
+            html_path = tmp_path / "overlay.html"
+            # A full-viewport fixed div with a high z-index sits over the button,
+            # so a click at the button's center would be intercepted by the div.
+            html_path.write_text(
+                "<button id='target'>Target</button>"
+                "<div style='position:fixed; top:0; left:0; width:100%; height:100%; "
+                "z-index:9999; background:rgba(0,0,0,0.5)'>overlay</div>"
+            )
+            await browser.goto(html_path.as_uri())
+            observation = await browser.observe()
+
+            target = next(el for el in observation.elements if el.name == "Target")
+            assert target.occluded is True
+            assert target.occluded_by == "div"
+            # The bare overlay div (no role/handler) carries no modal semantics, so
+            # detection falls back to geometry.
+            assert observation.modal_present is True
+            assert observation.modal_description == "a full-screen overlay"
+            assert "covered by <div>" in observation.to_prompt()
+
+    asyncio.run(_test())
+
+
+def test_observe_reports_no_occlusion_on_plain_page(tmp_path):
+    async def _test():
+        async with _launched_browser() as browser:
+            html_path = tmp_path / "plain.html"
+            html_path.write_text("<button>Click me</button>")
+            await browser.goto(html_path.as_uri())
+            observation = await browser.observe()
+
+            assert all(el.occluded is False for el in observation.elements)
+            assert observation.modal_present is False
+            assert observation.modal_description is None
+
+    asyncio.run(_test())
+
+
+def test_observe_detects_aria_modal_and_leaves_its_controls_clickable(tmp_path):
+    async def _test():
+        async with _launched_browser() as browser:
+            html_path = tmp_path / "modal.html"
+            html_path.write_text(
+                "<button id='bg'>Background</button>"
+                "<div role='dialog' aria-label='Cookie consent' "
+                "style='position:fixed; inset:0; z-index:10; background:white'>"
+                "<button id='accept'>Accept</button></div>"
+            )
+            await browser.goto(html_path.as_uri())
+            observation = await browser.observe()
+
+            assert observation.modal_present is True
+            assert "Cookie consent" in observation.modal_description
+
+            background = next(el for el in observation.elements if el.name == "Background")
+            accept = next(el for el in observation.elements if el.name == "Accept")
+            # The dialog covers the page, so the background control is occluded, but
+            # the dialog's own button sits on top and stays clickable.
+            assert background.occluded is True
+            assert accept.occluded is False
+
+    asyncio.run(_test())
+
+
 def test_type_action_roundtrip(tmp_path):
     async def _test():
         async with _launched_browser() as browser:

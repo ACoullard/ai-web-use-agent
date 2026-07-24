@@ -23,6 +23,8 @@ task: >
   - CVC: 123
   - Expiry: 12/30
 
+  - Address: 123 Main St, Anytown, CA, 12345, USA
+
 url: https://automationexercise.com/
 output_schema:
   type: object

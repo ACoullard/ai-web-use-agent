@@ -14,6 +14,8 @@ class ElementInfo(BaseModel):
     value: str | None = None
     href: str | None = None
     options: list[SelectOption] | None = None
+    occluded: bool = False
+    occluded_by: str | None = None
 
     def to_prompt_line(self) -> str:
         role_part = f" role={self.role}" if self.role else ""
@@ -23,7 +25,14 @@ class ElementInfo(BaseModel):
         if self.options:
             rendered = ", ".join(f"{o.value!r} ({o.label})" for o in self.options)
             options_part = f" options=[{rendered}]"
-        return f"[{self.index}] <{self.tag}>{role_part} {self.name!r}{value_part}{href_part}{options_part}"
+        occluded_part = ""
+        if self.occluded:
+            covered_by = f" by <{self.occluded_by}>" if self.occluded_by else ""
+            occluded_part = f" (covered{covered_by} - a click here would likely be intercepted)"
+        return (
+            f"[{self.index}] <{self.tag}>{role_part} {self.name!r}"
+            f"{value_part}{href_part}{options_part}{occluded_part}"
+        )
 
 
 class HeadLink(BaseModel):
@@ -45,9 +54,20 @@ class PageSnapshot(BaseModel):
     head_links: list[HeadLink] = []
     text_summary: str
     text_total_length: int = 0
+    modal_present: bool = False
+    modal_description: str | None = None
 
     def to_prompt(self) -> str:
-        lines = [f"Page title: {self.title}", f"URL: {self.url}", "", "Interactive elements:"]
+        lines = [f"Page title: {self.title}", f"URL: {self.url}", ""]
+        if self.modal_present:
+            what = self.modal_description or "a modal dialog"
+            lines.append(
+                f"NOTE: {what} appears to be open over the page. Other elements below it may "
+                "be covered and un-clickable until it is dismissed - handle it first (e.g. click "
+                "its close/accept/dismiss button, which is listed among the elements below)."
+            )
+            lines.append("")
+        lines.append("Interactive elements:")
         if self.elements:
             for el in self.elements:
                 lines.append(el.to_prompt_line())

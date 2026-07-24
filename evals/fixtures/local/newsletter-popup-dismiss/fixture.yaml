@@ -1,0 +1,12 @@
+id: newsletter-popup-dismiss
+task: "Reveal the coupon code on this page and report it. A newsletter popup covers the page on load - dismiss it before interacting with the page underneath."
+url: store.html
+output_schema:
+  type: object
+  properties:
+    code:
+      type: string
+  required: [code]
+grading: exact_match
+expected:
+  code: "FIXTURE20"
