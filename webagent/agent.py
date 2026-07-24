@@ -13,6 +13,7 @@ from webagent.actions import resolve_action_type
 from webagent.browser import BrowserController, ElementNotFoundError
 from webagent.output_spec import generic_answer_model, json_schema_to_model, self_check
 from webagent.page_snapshot import PageSnapshot
+from webagent.providers import check_model_config
 from webagent.result import AgentResult
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,7 @@ async def run_task(
     output_schema: dict[str, Any] | None = None,
     output_description: str | None = None,
     model: str = "anthropic:claude-sonnet-5",
+    thinking: str | bool = "medium",
     max_steps: int = 25,
     max_reask_attempts: int = 2,
     headless: bool = True,
@@ -114,13 +116,15 @@ async def run_task(
             answer={"system_prompt": system_prompt, "observation_prompt": observation.to_prompt()},
         )
 
+    check_model_config(model)
+
     action_type = resolve_action_type(answer_model)
 
     agent: Agent[None, Any] = Agent(
         model,
         output_type=action_type,
         system_prompt=system_prompt,
-        model_settings={"thinking": "medium"},
+        model_settings={"thinking": thinking},
         retries={"tools": 1, "output": max_reask_attempts},
     )
 

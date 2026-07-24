@@ -46,9 +46,16 @@ def _fake_record(fixture_id, *, passed=True, rationale=None):
 
 
 def _mock_run_suite(records_by_id=None, all_passed=True):
-    async def fake_run_suite(fixtures, *, model, judge_model, concurrency, headless, on_complete=None):
+    async def fake_run_suite(
+        fixtures, *, model, judge_model, thinking="medium", concurrency, headless, on_complete=None
+    ):
         fake_run_suite.received = dict(
-            fixtures=fixtures, model=model, judge_model=judge_model, concurrency=concurrency, headless=headless
+            fixtures=fixtures,
+            model=model,
+            judge_model=judge_model,
+            thinking=thinking,
+            concurrency=concurrency,
+            headless=headless,
         )
         records = [
             (records_by_id or {}).get(f.id) or _fake_record(f.id, passed=all_passed)

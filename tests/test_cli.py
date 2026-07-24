@@ -3,6 +3,7 @@ import json
 from typer.testing import CliRunner
 
 import webagent.cli as cli
+from webagent.providers import ProviderConfigError
 from webagent.result import AgentResult
 
 runner = CliRunner()
@@ -113,6 +114,47 @@ def test_schema_reads_json_file_into_output_schema(monkeypatch, tmp_path):
     assert result.exit_code == 0
     assert mock.received["output_schema"] == schema
     assert mock.received["output_description"] is None
+
+
+def test_thinking_defaults_to_medium(monkeypatch):
+    mock = _mock_run_task(status="success", answer={"ok": True})
+    monkeypatch.setattr(cli, "run_task", mock)
+
+    result = runner.invoke(
+        cli.app,
+        ["run", "--task", "do something", "--url", "https://example.com"],
+    )
+
+    assert result.exit_code == 0
+    assert mock.received["thinking"] == "medium"
+
+
+def test_thinking_off_threads_false(monkeypatch):
+    mock = _mock_run_task(status="success", answer={"ok": True})
+    monkeypatch.setattr(cli, "run_task", mock)
+
+    result = runner.invoke(
+        cli.app,
+        ["run", "--task", "do something", "--url", "https://example.com", "--thinking", "off"],
+    )
+
+    assert result.exit_code == 0
+    assert mock.received["thinking"] is False
+
+
+def test_provider_config_error_exits_three(monkeypatch):
+    async def boom(**_kwargs):
+        raise ProviderConfigError("OPENAI_API_KEY is not set, which is required to use openai models.")
+
+    monkeypatch.setattr(cli, "run_task", boom)
+
+    result = runner.invoke(
+        cli.app,
+        ["run", "--task", "do something", "--url", "https://example.com", "--model", "openai:gpt-4o"],
+    )
+
+    assert result.exit_code == 3
+    assert "OPENAI_API_KEY is not set" in result.output
 
 
 def test_schema_path_must_exist(monkeypatch, tmp_path):

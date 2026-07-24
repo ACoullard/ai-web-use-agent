@@ -10,15 +10,25 @@ from evals.grading import grade_fixture
 from evals.history import RunRecord
 from evals.models import Fixture
 from webagent.agent import run_task
+from webagent.providers import check_model_config
 
 
-async def run_fixture(fixture: Fixture, *, model: str, judge_model: str, headless: bool, run_id: str) -> RunRecord:
+async def run_fixture(
+    fixture: Fixture,
+    *,
+    model: str,
+    judge_model: str,
+    thinking: str | bool = "medium",
+    headless: bool,
+    run_id: str,
+) -> RunRecord:
     kwargs: dict[str, Any] = dict(
         task=fixture.task,
         url=fixture.url,
         output_schema=fixture.output_schema,
         output_description=fixture.output_description,
         model=model,
+        thinking=thinking,
         headless=headless,
     )
     if fixture.max_steps is not None:
@@ -72,6 +82,7 @@ async def run_suite(
     *,
     model: str,
     judge_model: str,
+    thinking: str | bool = "medium",
     concurrency: int = 1,
     headless: bool = True,
     on_complete: Callable[[RunRecord], None] | None = None,
@@ -84,13 +95,21 @@ async def run_suite(
     fixture order; `on_complete` fires in completion order (equal to fixture order
     when concurrency=1).
     """
+    check_model_config(model)
+    check_model_config(judge_model)
+
     run_id = uuid.uuid4().hex
     semaphore = asyncio.Semaphore(max(1, concurrency))
 
     async def _bounded(fixture: Fixture) -> RunRecord:
         async with semaphore:
             record = await run_fixture(
-                fixture, model=model, judge_model=judge_model, headless=headless, run_id=run_id
+                fixture,
+                model=model,
+                judge_model=judge_model,
+                thinking=thinking,
+                headless=headless,
+                run_id=run_id,
             )
             if on_complete is not None:
                 on_complete(record)

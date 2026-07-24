@@ -12,14 +12,22 @@ webagent evals run local/boolean-in-stock            # a single fixture, by its 
 webagent evals run local/a/fixture.yaml local/b/fixture.yaml  # multiple explicit paths
 webagent evals run --live                            # also run live fixtures (real websites)
 webagent evals run --model openai:gpt-4o --judge-model anthropic:claude-sonnet-5
+webagent evals run --thinking off                    # disable model reasoning/thinking
 webagent evals history                               # pass-rate trend across past runs
 ```
+
+`--model`/`--judge-model` take a Pydantic AI `"<provider>:<model>"` identifier.
+Supported providers are `anthropic` (`ANTHROPIC_API_KEY`) and `openai`
+(`OPENAI_API_KEY`) - the corresponding key must be set in the environment. `--thinking`
+(`minimal`/`low`/`medium`/`high`/`xhigh`/`off`, default `medium`) sets reasoning effort;
+it's honored by reasoning models and silently ignored by models that don't support it.
 
 Positional paths (files or directories) are resolved relative to `--fixtures-root`
 (default `evals/fixtures`), or used as-is if absolute. Omit them to run everything
 under `--fixtures-root`. `--fixtures` is kept as an alias for `--fixtures-root`.
 
-Exit code is `0` only if every selected fixture passes.
+Exit code is `0` only if every selected fixture passes; `3` for a provider/config error
+(unsupported provider or a missing API key).
 
 ## Fixture layout
 

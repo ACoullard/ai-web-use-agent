@@ -13,6 +13,7 @@ import typer
 
 from evals.cli import evals_app
 from webagent.agent import run_task
+from webagent.providers import ProviderConfigError, ThinkingLevel, resolve_thinking
 from webagent.result import AgentResult
 
 # Scraped page text can contain arbitrary Unicode; the default console codepage
@@ -93,6 +94,12 @@ def run(
         "--model",
         help='Model identifier passed to Pydantic AI, e.g. "anthropic:claude-sonnet-5" or "openai:gpt-4o".',
     ),
+    thinking: ThinkingLevel = typer.Option(
+        ThinkingLevel.MEDIUM,
+        "--thinking",
+        help="Reasoning/thinking effort. Honored by reasoning models (e.g. Anthropic, OpenAI "
+        "reasoning models); silently ignored by models that don't support it. Use 'off' to disable.",
+    ),
     max_steps: int = typer.Option(25, "--max-steps", help="Max agent loop iterations before giving up."),
     max_reask_attempts: int = typer.Option(
         2, "--max-reask-attempts", help="Max re-ask attempts on output validation failure."
@@ -120,6 +127,7 @@ def run(
       0  success / dry_run
       1  validation_failed
       2  max_steps_exceeded
+      3  provider/config error (unsupported provider or missing API key)
     """
     _configure_logging(log_level)
 
@@ -129,19 +137,24 @@ def run(
 
     output_schema = json.loads(schema.read_text()) if schema is not None else None
 
-    result: AgentResult = asyncio.run(
-        run_task(
-            task=task,
-            url=url,
-            output_schema=output_schema,
-            output_description=description,
-            model=model,
-            max_steps=max_steps,
-            max_reask_attempts=max_reask_attempts,
-            headless=headless,
-            dry_run=dry_run,
+    try:
+        result: AgentResult = asyncio.run(
+            run_task(
+                task=task,
+                url=url,
+                output_schema=output_schema,
+                output_description=description,
+                model=model,
+                thinking=resolve_thinking(thinking),
+                max_steps=max_steps,
+                max_reask_attempts=max_reask_attempts,
+                headless=headless,
+                dry_run=dry_run,
+            )
         )
-    )
+    except ProviderConfigError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(code=3)
 
     result_json = result.model_dump_json(indent=2)
     typer.echo(result_json)

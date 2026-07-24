@@ -133,6 +133,7 @@ Defaults, overridable per call:
 - `LLM Adapter` = thin usage of Pydantic AI's `Model` abstraction for the "decide next action" and "produce final structured answer" calls.
 - Model choice passed as a config string (`anthropic:claude-...`, `openai:gpt-...`) — mirrors browser-use's provider-prefix pattern, easy to extend.
 - Keep our own code responsible for *what* we ask the model (the loop, the observation format, the action schema) — Pydantic AI only owns *how* that request reaches whichever provider is configured.
+- Enabled providers today: `anthropic` (`ANTHROPIC_API_KEY`) and `openai` (`OPENAI_API_KEY`). `webagent/providers.py` centralizes the prefix→key table and a preflight `check_model_config()` that fails fast with a friendly message on an unknown provider or missing key (CLI exit code 3). Reasoning effort is set via the provider-agnostic `--thinking` flag (Pydantic AI's unified `thinking` setting), honored by reasoning models and ignored by others.
 
 ### 3.8 Vision fallback (set-of-mark screenshots)
 

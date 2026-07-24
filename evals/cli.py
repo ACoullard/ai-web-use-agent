@@ -14,6 +14,7 @@ from evals.history import append_history, load_history, pass_rate_by_run
 from evals.loader import filter_fixtures, load_fixture_paths
 from evals.report import format_failure_section, format_progress_mark, format_summary_line
 from evals.runner import run_suite
+from webagent.providers import ProviderConfigError, ThinkingLevel, resolve_thinking
 
 evals_app = typer.Typer(name="evals", help="Offline eval harness for the agent.")
 
@@ -54,6 +55,12 @@ def run(
     judge_model: Optional[str] = typer.Option(
         None, "--judge-model", help="Model for llm_judge grading. Defaults to --model."
     ),
+    thinking: ThinkingLevel = typer.Option(
+        ThinkingLevel.MEDIUM,
+        "--thinking",
+        help="Reasoning/thinking effort for the model under test. Honored by reasoning models; "
+        "silently ignored by models that don't support it. Use 'off' to disable.",
+    ),
     concurrency: int = typer.Option(1, "--concurrency", help="Max fixtures to run in parallel."),
     headless: bool = typer.Option(True, "--headless/--no-headless"),
     history: Path = typer.Option(
@@ -68,8 +75,9 @@ def run(
     and grade the results.
 
     Exit code 0 only if every selected fixture passes; 1 otherwise (or if no
-    fixtures matched, or a given path doesn't exist). Live fixtures are excluded
-    unless --live is given.
+    fixtures matched, or a given path doesn't exist); 3 for a provider/config error
+    (unsupported provider or missing API key). Live fixtures are excluded unless
+    --live is given.
     """
     _configure_logging(log_level)
 
@@ -98,16 +106,21 @@ def run(
     def _on_complete(record) -> None:
         typer.echo(format_progress_mark(record), nl=False)
 
-    records = asyncio.run(
-        run_suite(
-            selected,
-            model=model,
-            judge_model=judge_model or model,
-            concurrency=concurrency,
-            headless=headless,
-            on_complete=_on_complete,
+    try:
+        records = asyncio.run(
+            run_suite(
+                selected,
+                model=model,
+                judge_model=judge_model or model,
+                thinking=resolve_thinking(thinking),
+                concurrency=concurrency,
+                headless=headless,
+                on_complete=_on_complete,
+            )
         )
-    )
+    except ProviderConfigError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(code=3)
     typer.echo()  # end the progress-mark line
 
     failure_section = format_failure_section(records)
