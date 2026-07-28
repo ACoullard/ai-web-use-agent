@@ -20,9 +20,17 @@ from webagent.providers import (
     resolve_thinking,
 )
 from webagent.result import AgentResult
-from webagent.trace import FileTracer, NullTracer, Trace, filter_traces, find_trace, load_traces
-from webagent.trace_view import render_list, render_trace
-from webagent.trace_web import serve as serve_traces
+from webagent.traces import (
+    FileTracer,
+    NullTracer,
+    Trace,
+    filter_traces,
+    find_trace,
+    load_traces,
+    render_list,
+    render_trace,
+)
+from webagent.traces import serve as serve_traces
 
 # Scraped page text can contain arbitrary Unicode; the default console codepage
 # (e.g. cp1252 on Windows) can't encode all of it, so force UTF-8 for stdout/stderr.

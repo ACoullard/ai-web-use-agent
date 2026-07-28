@@ -14,7 +14,7 @@ from webagent.output_spec import generic_answer_model, json_schema_to_model, sel
 from webagent.page_snapshot import PageSnapshot
 from webagent.providers import DEFAULT_MODEL, DEFAULT_THINKING, check_model_config, resolve_thinking
 from webagent.result import AgentResult
-from webagent.trace import NullTracer, Tracer
+from webagent.traces import NullTracer, Tracer
 
 logger = logging.getLogger(__name__)
 

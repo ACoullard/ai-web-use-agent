@@ -9,7 +9,7 @@ analysis. The web UI (`trace_web.py`) is the richer point-and-click alternative 
 import json
 from typing import Any
 
-from webagent.trace import Generation, ToolCall, Trace
+from webagent.traces.trace import Generation, ToolCall, Trace
 
 _PREVIEW_CHARS = 200
 

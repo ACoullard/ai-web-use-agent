@@ -13,7 +13,7 @@ from evals.loader import filter_fixtures, load_fixture_paths
 from evals.report import format_failure_section, format_progress_mark, format_summary_line
 from evals.runner import run_suite
 from webagent.config import eval_traces_dir
-from webagent.trace import FileTracer, NullTracer
+from webagent.traces import FileTracer, NullTracer
 from webagent.providers import (
     DEFAULT_MODEL,
     DEFAULT_THINKING,

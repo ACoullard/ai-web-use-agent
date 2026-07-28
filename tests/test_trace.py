@@ -10,7 +10,7 @@ from pydantic_ai.usage import RequestUsage
 
 from webagent.actions import ClickAction
 from webagent.output_spec import SelfCheckVerdict
-from webagent.trace import (
+from webagent.traces import (
     FileTracer,
     Generation,
     NullTracer,

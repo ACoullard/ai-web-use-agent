@@ -1,8 +1,8 @@
 """A tiny, dependency-free local website for browsing traces on disk.
 
 `webagent trace serve` starts a stdlib HTTP server bound to loopback that serves the static
-page in `webagent/web/` plus a small read-only JSON API over the same `webagent.trace`
-functions. The page has two levels: a filterable/sortable list of runs, and a drill-down
+page in `webagent/traces/web/` plus a small read-only JSON API over the same
+`webagent.traces.trace` functions. The page has two levels: a filterable/sortable list of runs, and a drill-down
 detail view of one run's step timeline (generation vs tool observations, expandable to the
 exact input/reasoning/output).
 
@@ -15,7 +15,7 @@ import logging
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from webagent.trace import find_trace, load_traces
+from webagent.traces.trace import find_trace, load_traces
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ _STATIC_TYPES = {
 
 
 def _serve_static(name: str) -> tuple[int, str, bytes] | None:
-    """Read one file straight out of `webagent/web/`, or None if it isn't a servable asset.
+    """Read one file straight out of `web/`, or None if it isn't a servable asset.
 
     Only direct children of that directory with a known extension are served, so a
     crafted name (`../`, an absolute path) resolves outside `_WEB_DIR` and is rejected.

@@ -7,7 +7,7 @@ import webagent.cli as cli
 from webagent import config
 from webagent.providers import ProviderConfigError
 from webagent.result import AgentResult
-from webagent.trace import Generation, NullTracer, Trace, save_trace
+from webagent.traces import Generation, NullTracer, Trace, save_trace
 
 runner = CliRunner()
 

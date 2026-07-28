@@ -6,7 +6,7 @@ import evals.runner as runner_mod
 from evals.models import Fixture
 from evals.runner import run_suite
 from webagent.result import AgentResult
-from webagent.trace import FileTracer, load_traces
+from webagent.traces import FileTracer, load_traces
 
 
 def _fixture(fixture_id: str) -> Fixture:

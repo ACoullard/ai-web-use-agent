@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
-from webagent.trace import Generation, ToolCall, Trace
-from webagent.trace_view import render_list, render_trace
+from webagent.traces import Generation, ToolCall, Trace
+from webagent.traces import render_list, render_trace
 
 _LONG = "x" * 500
 

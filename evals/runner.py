@@ -9,7 +9,7 @@ from evals.history import RunRecord
 from evals.models import Fixture
 from webagent.agent import run_task
 from webagent.providers import DEFAULT_THINKING, check_model_config, resolve_thinking
-from webagent.trace import NullTracer, Tracer
+from webagent.traces import NullTracer, Tracer
 
 
 async def run_fixture(

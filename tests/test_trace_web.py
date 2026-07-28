@@ -1,8 +1,8 @@
 import json
 from datetime import datetime, timezone
 
-from webagent.trace import Generation, Trace, save_trace
-from webagent.trace_web import handle_request, make_server
+from webagent.traces import Generation, Trace, save_trace
+from webagent.traces.server import handle_request, make_server
 
 
 def _write_trace(directory):
