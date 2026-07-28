@@ -10,7 +10,6 @@ Loopback is still allowed so Playwright's local driver/browser plumbing in
 test_browser.py keeps working. A test that genuinely needs the network can opt out
 with `@pytest.mark.allow_network`.
 """
-from __future__ import annotations
 
 import ipaddress
 import socket
