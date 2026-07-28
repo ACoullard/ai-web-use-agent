@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import time
 import uuid
@@ -11,6 +9,7 @@ from evals.history import RunRecord
 from evals.models import Fixture
 from webagent.agent import run_task
 from webagent.providers import DEFAULT_THINKING, check_model_config, resolve_thinking
+from webagent.trace import NullTracer, Tracer
 
 
 async def run_fixture(
@@ -21,6 +20,7 @@ async def run_fixture(
     thinking: str | bool = resolve_thinking(DEFAULT_THINKING),
     headless: bool,
     run_id: str,
+    tracer: Tracer,
 ) -> RunRecord:
     kwargs: dict[str, Any] = dict(
         task=fixture.task,
@@ -30,6 +30,7 @@ async def run_fixture(
         model=model,
         thinking=thinking,
         headless=headless,
+        tracer=tracer.with_labels(fixture_id=fixture.id),
     )
     if fixture.max_steps is not None:
         kwargs["max_steps"] = fixture.max_steps
@@ -85,6 +86,7 @@ async def run_suite(
     thinking: str | bool = resolve_thinking(DEFAULT_THINKING),
     concurrency: int = 1,
     headless: bool = True,
+    tracer: Tracer | None = None,
     on_complete: Callable[[RunRecord], None] | None = None,
 ) -> list[RunRecord]:
     """Run every fixture, at most `concurrency` at a time.
@@ -99,6 +101,8 @@ async def run_suite(
     check_model_config(judge_model)
 
     run_id = uuid.uuid4().hex
+    # the suite owns run_id, so it stamps that label once; run_fixture adds fixture_id.
+    suite_tracer = (tracer or NullTracer()).with_labels(run_id=run_id)
     semaphore = asyncio.Semaphore(max(1, concurrency))
 
     async def _bounded(fixture: Fixture) -> RunRecord:
@@ -110,6 +114,7 @@ async def run_suite(
                 thinking=thinking,
                 headless=headless,
                 run_id=run_id,
+                tracer=suite_tracer,
             )
             if on_complete is not None:
                 on_complete(record)

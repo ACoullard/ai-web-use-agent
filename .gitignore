@@ -9,5 +9,12 @@ wheels/
 # Virtual environments
 .venv
 
+# Local environment config (secrets); .env.example is committed
+.env
+
 # Eval run telemetry (machine/run-local, not source)
 evals/runs/
+
+# Trace output (machine/run-local, not source). Default $TRACES_DIR is
+# .webagent/traces; `traces/` covers the common override in .env.
+/traces/

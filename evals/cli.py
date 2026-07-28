@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import enum
 import json
@@ -14,6 +12,8 @@ from evals.history import append_history, load_history, pass_rate_by_run
 from evals.loader import filter_fixtures, load_fixture_paths
 from evals.report import format_failure_section, format_progress_mark, format_summary_line
 from evals.runner import run_suite
+from webagent.config import eval_traces_dir
+from webagent.trace import FileTracer, NullTracer
 from webagent.providers import (
     DEFAULT_MODEL,
     DEFAULT_THINKING,
@@ -72,6 +72,9 @@ def run(
     history: Path = typer.Option(
         Path("evals/runs/history.jsonl"), "--history", help="Append-only JSONL results log."
     ),
+    trace: bool = typer.Option(
+        True, "--trace/--no-trace", help="Record a trace per fixture run under $TRACES_DIR/evals."
+    ),
     report: Optional[Path] = typer.Option(None, "--report", "-o", help="Also write this run's records as JSON."),
     log_level: Optional[LogLevel] = typer.Option(
         None, "--log-level", help="Logging verbosity. [default: WARNING, or $LOG_LEVEL env var]"
@@ -121,6 +124,7 @@ def run(
                 thinking=resolve_thinking(thinking),
                 concurrency=concurrency,
                 headless=headless,
+                tracer=FileTracer(eval_traces_dir()) if trace else NullTracer(),
                 on_complete=_on_complete,
             )
         )

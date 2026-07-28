@@ -61,3 +61,12 @@ directly. The pytest suite (`tests/`) is guarded against live LLM calls; keep it
 
 `runs/history.jsonl` is gitignored run-local telemetry — never commit it or treat it as
 source.
+
+## Traces
+
+`evals run` records one trace per fixture run under `--trace-dir` (default `evals/runs/traces/`,
+gitignored via `runs/`; `--no-trace` to skip). Each trace is stamped with `fixture_id` and the
+suite's `run_id`, so after a run you can slice them with the top-level `webagent trace` commands
+— e.g. `webagent trace list --fixture <id> --format agent` for a Claude-readable digest of a
+fixture's runs, or `webagent trace serve --trace-dir evals/runs/traces` to browse. See the
+top-level `AGENTS.md` for the trace model.

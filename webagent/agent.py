@@ -1,7 +1,6 @@
-from __future__ import annotations
-
 import json
 import logging
+import time
 from typing import Any
 
 from playwright.async_api import Error as PlaywrightError
@@ -15,6 +14,7 @@ from webagent.output_spec import generic_answer_model, json_schema_to_model, sel
 from webagent.page_snapshot import PageSnapshot
 from webagent.providers import DEFAULT_MODEL, DEFAULT_THINKING, check_model_config, resolve_thinking
 from webagent.result import AgentResult
+from webagent.trace import NullTracer, Tracer
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +87,7 @@ async def run_task(
     max_reask_attempts: int = 2,
     headless: bool = True,
     dry_run: bool = False,
+    tracer: Tracer | None = None,
 ) -> AgentResult:
     if output_schema is not None and output_description is not None:
         raise ValueError("Pass at most one of output_schema, output_description")
@@ -117,6 +118,28 @@ async def run_task(
         )
 
     check_model_config(model)
+
+    run_started = time.monotonic()
+    recording = (tracer or NullTracer()).start(
+        task=task,
+        url=url,
+        model=model,
+        thinking="off" if thinking is False else thinking if isinstance(thinking, str) else "on",
+        output_mode=(
+            "schema" if output_schema is not None else "description" if output_description is not None else "freeform"
+        ),
+        system_prompt=system_prompt,
+    )
+
+    def _persist(result: AgentResult) -> AgentResult:
+        """Close the recording on any exit path, stamping its id onto the result."""
+        recording.finish(
+            status=result.status,
+            steps_taken=result.steps_taken,
+            duration=time.monotonic() - run_started,
+        )
+        result.trace_id = recording.trace_id
+        return result
 
     action_type = resolve_action_type(answer_model)
 
@@ -150,10 +173,13 @@ async def run_task(
                 prompt = f"{pending_reask_note}\n\n{prompt}"
                 pending_reask_note = None
 
+            gen_started = time.monotonic()
             result = await agent.run(prompt, message_history=message_history)
+            gen_duration = time.monotonic() - gen_started
             for message in result.new_messages():
                 if isinstance(message, ModelResponse):
                     _log_model_response(message)
+            recording.record_generation(step, prompt, result, gen_duration)
             message_history = result.new_messages()
             action = result.output
             logger.info("step %d action: %r", step, action)
@@ -161,22 +187,33 @@ async def run_task(
             if action.type == "finish":
                 if answer_model is None:
                     logger.info("finished after %d steps: %s", step + 1, action.answer)
-                    return AgentResult(status="success", answer=action.answer, steps_taken=step + 1)
+                    return _persist(AgentResult(status="success", answer=action.answer, steps_taken=step + 1))
 
                 if output_schema is not None:
                     logger.info("finished after %d steps with schema-validated answer", step + 1)
-                    return AgentResult(
-                        status="success",
-                        answer=answer_adapter.dump_python(action.answer, mode="json"),
-                        steps_taken=step + 1,
+                    return _persist(
+                        AgentResult(
+                            status="success",
+                            answer=answer_adapter.dump_python(action.answer, mode="json"),
+                            steps_taken=step + 1,
+                        )
                     )
 
                 # output_description mode: structurally valid ({"result": ...}), but
                 # still needs a semantic self-check against the caller's description.
+                sc_started = time.monotonic()
                 verdict = await self_check(task, output_description, action.answer.result, model)
+                sc_input = (
+                    "Does the produced result satisfy the expected output description?\n"
+                    f"Description: {output_description}\n"
+                    f"Result: {json.dumps(action.answer.result, default=str)}"
+                )
+                recording.record_self_check(step, sc_input, verdict, time.monotonic() - sc_started)
                 if verdict.passes:
                     logger.info("finished after %d steps, self-check passed", step + 1)
-                    return AgentResult(status="success", answer=action.answer.model_dump(), steps_taken=step + 1)
+                    return _persist(
+                        AgentResult(status="success", answer=action.answer.model_dump(), steps_taken=step + 1)
+                    )
 
                 if reask_attempts_used >= max_reask_attempts:
                     logger.warning(
@@ -184,11 +221,13 @@ async def run_task(
                         reask_attempts_used,
                         verdict.reason,
                     )
-                    return AgentResult(
-                        status="validation_failed",
-                        error=verdict.reason,
-                        attempts=reask_attempts_used,
-                        steps_taken=step,
+                    return _persist(
+                        AgentResult(
+                            status="validation_failed",
+                            error=verdict.reason,
+                            attempts=reask_attempts_used,
+                            steps_taken=step,
+                        )
                     )
 
                 reask_attempts_used += 1
@@ -204,11 +243,18 @@ async def run_task(
                 )
                 continue  # a reask attempt doesn't consume a browsing step
 
+            tool_started = time.monotonic()
             try:
                 action_result = await browser.execute(action)
                 if action_result is not None:
                     pending_reask_note = action_result
+                recording.record_tool(
+                    action, step, time.monotonic() - tool_started, status="ok", result=action_result
+                )
             except ElementNotFoundError as e:
+                recording.record_tool(
+                    action, step, time.monotonic() - tool_started, status="error", error=str(e)
+                )
                 logger.warning("step %d action %r failed: %s", step, action, e)
                 pending_reask_note = (
                     f"Your last action ({action!r}) failed: {e} "
@@ -216,12 +262,15 @@ async def run_task(
                     "observation below before trying again."
                 )
             except PlaywrightError as e:
+                recording.record_tool(
+                    action, step, time.monotonic() - tool_started, status="error", error=str(e)
+                )
                 logger.warning("step %d action %r failed: %s", step, action, e)
                 pending_reask_note = (
                     f"Your last action ({action!r}) failed: {e}."
                 )
             step += 1
         logger.warning("max_steps_exceeded after %d steps", max_steps)
-        return AgentResult(status="max_steps_exceeded", steps_taken=step)
+        return _persist(AgentResult(status="max_steps_exceeded", steps_taken=step))
     finally:
         await browser.close()

@@ -10,6 +10,7 @@ dependencies = [
     "pydantic-ai-slim[anthropic,openai]>=0.0.20",
     "typer>=0.12",
     "pyyaml>=6.0",
+    "python-dotenv>=1.0",
 ]
 
 [project.scripts]
@@ -30,3 +31,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["webagent*", "evals*"]
+
+# Non-Python assets read at runtime: the page-extraction script and the trace browser's page.
+[tool.setuptools.package-data]
+webagent = ["js/*.js", "web/*"]

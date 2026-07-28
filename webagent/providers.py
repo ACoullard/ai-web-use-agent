@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import enum
 import os
 from collections.abc import Mapping
@@ -29,7 +27,8 @@ class ThinkingLevel(str, enum.Enum):
 
 
 DEFAULT_THINKING: ThinkingLevel = ThinkingLevel.MEDIUM
-DEFAULT_MODEL = "anthropic:claude-sonnet-5"
+# DEFAULT_MODEL = "anthropic:claude-sonnet-5"
+DEFAULT_MODEL = "openai:gpt-5.6-terra"
 
 
 def resolve_thinking(level: ThinkingLevel) -> str | bool:

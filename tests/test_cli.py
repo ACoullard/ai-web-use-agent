@@ -1,10 +1,13 @@
 import json
+from datetime import datetime, timezone
 
 from typer.testing import CliRunner
 
 import webagent.cli as cli
+from webagent import config
 from webagent.providers import ProviderConfigError
 from webagent.result import AgentResult
+from webagent.trace import Generation, NullTracer, Trace, save_trace
 
 runner = CliRunner()
 
@@ -167,3 +170,88 @@ def test_schema_path_must_exist(monkeypatch, tmp_path):
     )
 
     assert result.exit_code != 0
+
+
+def test_run_injects_file_tracer_pointed_at_live_dir(monkeypatch):
+    mock = _mock_run_task(status="success", answer={"ok": True})
+    monkeypatch.setattr(cli, "run_task", mock)
+    monkeypatch.delenv("TRACES_DIR", raising=False)
+
+    result = runner.invoke(cli.app, ["run", "--task", "t", "--url", "https://example.com"])
+
+    assert result.exit_code == 0
+    assert mock.received["tracer"].directory == config.live_traces_dir()
+
+
+def test_run_tracer_directory_follows_traces_dir_env(monkeypatch, tmp_path):
+    mock = _mock_run_task(status="success", answer={"ok": True})
+    monkeypatch.setattr(cli, "run_task", mock)
+    monkeypatch.setenv("TRACES_DIR", str(tmp_path))
+
+    result = runner.invoke(cli.app, ["run", "--task", "t", "--url", "https://example.com"])
+
+    assert result.exit_code == 0
+    assert mock.received["tracer"].directory == tmp_path / "live"
+
+
+def test_run_no_trace_injects_null_tracer(monkeypatch):
+    mock = _mock_run_task(status="success", answer={"ok": True})
+    monkeypatch.setattr(cli, "run_task", mock)
+
+    result = runner.invoke(cli.app, ["run", "--task", "t", "--url", "https://example.com", "--no-trace"])
+
+    assert result.exit_code == 0
+    assert isinstance(mock.received["tracer"], NullTracer)
+
+
+def _write_trace(directory, *, task="find pricing", model="test:model", status="success"):
+    trace = Trace(
+        trace_id="cafebabe1234",
+        created_at=datetime(2026, 7, 24, 8, 0, tzinfo=timezone.utc),
+        task=task,
+        url="https://example.com",
+        model=model,
+        thinking="medium",
+        output_mode="freeform",
+        status=status,
+        steps_taken=1,
+        observations=[
+            Generation(name="decide_action", step=0, duration_seconds=1.0, model=model,
+                       input_prompt="p", output={"type": "finish", "answer": "42"})
+        ],
+    )
+    save_trace(trace, directory)
+    return trace
+
+
+def test_trace_list_shows_written_trace(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRACES_DIR", str(tmp_path))
+    _write_trace(tmp_path / "live")
+    result = runner.invoke(cli.app, ["trace", "list"])
+    assert result.exit_code == 0
+    assert "cafebabe" in result.output
+    assert "find pricing" in result.output
+
+
+def test_trace_list_filters(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRACES_DIR", str(tmp_path))
+    _write_trace(tmp_path / "live")
+    hit = runner.invoke(cli.app, ["trace", "list", "--model", "test:model"])
+    miss = runner.invoke(cli.app, ["trace", "list", "--model", "other:model"])
+    assert "cafebabe" in hit.output
+    assert "No traces" in miss.output
+
+
+def test_trace_show_by_prefix(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRACES_DIR", str(tmp_path))
+    trace = _write_trace(tmp_path / "evals")
+    result = runner.invoke(cli.app, ["trace", "show", trace.trace_id[:8]])
+    assert result.exit_code == 0
+    assert "◆ generation" in result.output
+    assert "find pricing" in result.output
+
+
+def test_trace_show_unknown_id_exits_one(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRACES_DIR", str(tmp_path))
+    result = runner.invoke(cli.app, ["trace", "show", "zzzzzzzz"])
+    assert result.exit_code == 1

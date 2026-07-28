@@ -16,3 +16,4 @@ class AgentResult(BaseModel):
     error: str | None = None
     attempts: int | None = None
     steps_taken: int = 0
+    trace_id: str | None = None
