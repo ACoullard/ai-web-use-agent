@@ -1,9 +1,8 @@
 """Text renderers for traces - the terminal (`human`) and agent-oriented (`agent`) views.
 
-Both are plain text / markdown, dependency-free, so the same output reads well in a terminal
-and when handed to AI. `human` truncates long fields (with drill-down via `--raw`/`--step`)
-and keeps things scannable; `agent` drops truncation and emits full markdown for prompt-iteration
-analysis. The web UI (`trace_web.py`) is the richer point-and-click alternative to `human`.
+Both are plain text / markdown, dependency-free, so the same output reads well in a
+terminal and when handed to AI. `human` truncates long fields and keeps things scannable;
+`agent` drops truncation and emits full markdown for prompt-iteration analysis.
 """
 
 import json

@@ -15,6 +15,5 @@ wheels/
 # Eval run telemetry (machine/run-local, not source)
 evals/runs/
 
-# Trace output (machine/run-local, not source). Default $TRACES_DIR is
-# .webagent/traces; `traces/` covers the common override in .env.
+# Trace output (machine/run-local, not source). Default $TRACES_DIR is `traces`.
 /traces/

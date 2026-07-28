@@ -16,7 +16,7 @@ class ProviderConfigError(Exception):
 
 
 class ThinkingLevel(str, enum.Enum):
-    """CLI-facing reasoning/thinking effort levels (see `resolve_thinking`)."""
+    """Named reasoning/thinking effort levels (see `resolve_thinking` for the mapping)."""
 
     MINIMAL = "minimal"
     LOW = "low"
@@ -32,7 +32,7 @@ DEFAULT_MODEL = "openai:gpt-5.6-terra"
 
 
 def resolve_thinking(level: ThinkingLevel) -> str | bool:
-    """Map the CLI enum to Pydantic AI's unified `thinking` setting (`off` -> False)."""
+    """Map a `ThinkingLevel` to Pydantic AI's unified `thinking` setting (`off` -> False)."""
     return False if level is ThinkingLevel.OFF else level.value
 
 

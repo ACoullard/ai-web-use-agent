@@ -49,7 +49,7 @@ can pass to `webagent trace show`.
 
 ## Where files land
 
-Under `$TRACES_DIR` (default `.webagent/traces/`), split into `live/` for `webagent run` and
+Under `$TRACES_DIR` (default `traces/`), split into `live/` for `webagent run` and
 `evals/` for the harness. `load_traces()` recurses, so `webagent trace` browses both as one
 collection. Filenames are `<timestamp>-<trace_id[:8]>.json`, which sorts chronologically.
 The two `FileTracer(...)` construction sites in `webagent/cli.py` and `evals/cli.py` are the
@@ -63,7 +63,7 @@ only places a trace directory is named.
   are read per request, so a browser refresh picks up edits to `web/`; `server.py` is only
   routing and the JSON API.
 
-`--format agent` emits markdown built for Claude to read when iterating on prompts.
+`--format agent` emits markdown built for an LLM to read when iterating on prompts.
 
 ## Gotcha: empty reasoning text
 

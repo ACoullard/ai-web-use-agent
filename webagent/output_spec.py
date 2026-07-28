@@ -1,5 +1,4 @@
 import json
-from dataclasses import dataclass
 from typing import Any, Literal, Union
 
 from pydantic import BaseModel, create_model
@@ -13,18 +12,6 @@ _SCALAR_TYPES: dict[str, type] = {
     "number": float,
     "boolean": bool,
 }
-
-
-@dataclass(frozen=True)
-class OutputSpec:
-    """Caller-supplied contract for a run_task() answer - exactly one of the two."""
-
-    json_schema: dict[str, Any] | None = None
-    description: str | None = None
-
-    def __post_init__(self) -> None:
-        if bool(self.json_schema) == bool(self.description):
-            raise ValueError("OutputSpec requires exactly one of json_schema or description")
 
 
 def _check_unsupported(schema: dict[str, Any], name: str) -> None:

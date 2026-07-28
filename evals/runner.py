@@ -101,7 +101,6 @@ async def run_suite(
     check_model_config(judge_model)
 
     run_id = uuid.uuid4().hex
-    # the suite owns run_id, so it stamps that label once; run_fixture adds fixture_id.
     suite_tracer = (tracer or NullTracer()).with_labels(run_id=run_id)
     semaphore = asyncio.Semaphore(max(1, concurrency))
 

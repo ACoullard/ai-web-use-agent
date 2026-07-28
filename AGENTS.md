@@ -14,7 +14,7 @@ and dependencies from `pyproject.toml`/`uv.lock`.
 Runtime configuration lives in the environment, not in CLI flags. `webagent/config.py`
 loads a `.env` in the working directory at import (real exported vars win over it); copy
 `.env.example` to `.env` and fill it in. Variables: `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`
-(provider keys), `TRACES_DIR` (where traces go, default `.webagent/traces`), `LOG_LEVEL`.
+(provider keys), `TRACES_DIR` (where traces go, default `traces`), `LOG_LEVEL`.
 
 ## Traces
 

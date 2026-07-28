@@ -1,22 +1,17 @@
-"""Durable, human- and Claude-legible traces of an agent run.
+"""Durable, human- and AI-legible traces of an agent run.
 
-A `Trace` is one `run_task()` invocation. It holds filterable metadata (task, model,
-thinking effort, outcome, ...) plus an ordered list of `Observation`s. Following
-Langfuse's "observation type" idea - trimmed to what this agent can actually produce -
-there are exactly two kinds:
+A `Trace` is one run: filterable metadata (task, model, thinking effort, outcome, ...)
+plus an ordered list of `Observation`s, of which there are exactly two kinds:
 
 - `Generation`: an LLM call (deciding the next action, or the output self-check).
 - `ToolCall`: a browser action execution (click/type/select/...) and its result.
 
-The `finish` action is terminal, not a browser action, so it appears as the `output` of
-the final `Generation` rather than a `ToolCall`.
+A terminal `finish` action is not a browser action, so it appears as the `output` of the
+final `Generation` rather than as a `ToolCall`.
 
 Field names track OpenTelemetry's GenAI vocabulary where they map cleanly (`input_tokens`,
-`output_tokens`, `finish_reason`, `provider_response_id`) so the JSON stays familiar and
-could be exported to an OTel backend later - but the shape is our own typed model, not raw
-spans. Everything here is read straight off the objects `run_task()` already holds
-(`result.new_messages()`, `result.output`, `result.usage()`), so no instrumentation SDK is
-involved.
+`output_tokens`, `finish_reason`, `provider_response_id`), but the shape is a plain typed
+model, not raw spans.
 """
 
 import json
@@ -77,7 +72,7 @@ Observation = Annotated[Union[Generation, ToolCall], Field(discriminator="type")
 
 
 class Trace(BaseModel):
-    """One `run_task()` invocation: filterable metadata + ordered observations."""
+    """One agent run: filterable metadata + ordered observations."""
 
     schema_version: int = 1
     trace_id: str
@@ -101,7 +96,7 @@ class Trace(BaseModel):
     observations: list[Observation] = Field(default_factory=list)
 
     def summary(self) -> dict[str, Any]:
-        """The metadata-only view used by trace list / the web list page (no heavy content)."""
+        """Metadata only, dropping the heavy content fields - for listing many traces at once."""
         return self.model_dump(mode="json", exclude={"observations", "system_prompt"})
 
 
@@ -159,9 +154,9 @@ def _attempted_output(response: ModelResponse) -> Any:
 class TraceRecorder:
     """Accumulates observations for one run and builds the final `Trace`.
 
-    Created by `Tracer.start()`, not directly by `run_task()` - the tracer supplies the
-    `persist` hook that decides where the finished trace goes (or that it goes nowhere).
-    One instance per run, so concurrent runs never share mutable state.
+    Obtained from `Tracer.start()`, which supplies the `persist` hook deciding where the
+    finished trace goes (or that it goes nowhere). One instance per run, so concurrent
+    runs never share mutable state.
     """
 
     def __init__(
@@ -233,8 +228,8 @@ class TraceRecorder:
             )
 
     def record_self_check(self, step: int, input_prompt: str, verdict: Any, duration: float) -> None:
-        """Record the output self-check LLM call. Tokens/reasoning aren't captured here -
-        `self_check()` returns only the verdict - which keeps that helper decoupled."""
+        """Record the output self-check LLM call. Only the verdict is recorded; token counts
+        and reasoning are not part of what this call reports back."""
         self.observations.append(
             Generation(
                 name="self_check",
@@ -323,12 +318,12 @@ class Recording(Protocol):
 
 
 class Tracer(Protocol):
-    """Where traces go, decided once by the caller and injected into `run_task()`.
+    """Where traces go, decided once by the caller and injected into the run.
 
-    Like a logger: the agent loop calls `start()` and records into the result without
-    knowing whether anything is written, or where. `with_labels()` derives a tracer
-    carrying extra filterable metadata - the eval harness uses it to stamp `run_id` at
-    suite level and `fixture_id` per fixture, so those never enter `run_task`'s signature.
+    Like a logger: the caller invokes `start()` and records into the returned `Recording`
+    without knowing whether anything is written, or where. `with_labels()` derives a new
+    tracer carrying extra filterable metadata (never mutating the original), so labels can
+    be stamped at one level and apply to every run started beneath it.
     """
 
     def start(
@@ -364,7 +359,7 @@ class NullRecording:
 
 
 class NullTracer:
-    """Tracer that records nothing - what `run_task()` uses when tracing is off."""
+    """Tracer that records nothing: the off-switch for tracing."""
 
     def start(self, **metadata: Any) -> Recording:
         return NullRecording()
@@ -404,8 +399,8 @@ def save_trace(trace: Trace, directory: Path) -> Path:
 def load_traces(directory: Path) -> list[Trace]:
     """Load every trace under `directory` (recursively), newest first.
 
-    Recursion lets a single traces root hold `live/` and `evals/` subdirectories and
-    still be browsed as one collection. Malformed files are skipped.
+    Recursion lets one traces root hold several subdirectories of runs and still be
+    browsed as a single collection. Malformed files are skipped.
     """
     if not directory.exists():
         return []
@@ -450,7 +445,7 @@ def filter_traces(
 
 
 def find_trace(traces: list[Trace], id_or_prefix: str) -> Trace | None:
-    """Resolve a trace by exact id or unambiguous id-prefix (as typed by `trace show`)."""
+    """Resolve a trace by exact id, or by an id-prefix if it matches exactly one trace."""
     exact = [t for t in traces if t.trace_id == id_or_prefix]
     if exact:
         return exact[0]

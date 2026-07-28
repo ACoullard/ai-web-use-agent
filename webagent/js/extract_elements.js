@@ -27,13 +27,13 @@
     return el.closest('[aria-hidden="true"], [inert]') !== null;
   }
 
-  // Hit-test the element's center against document.elementFromPoint
-  // If the topmost element at that point isn't this element (nor an ancestor/descendant of it),
-  // something is painted over it 
-  // typically a modal, cookie banner, or toast - and a click would be
-  // intercepted. Returns the covering element's tag, or null when unoccluded or
-  // untestable (elementFromPoint only works for points inside the viewport, so an
-  // element scrolled out of view can't be hit-tested and is treated as unoccluded).
+  // Hit-test the element's center against document.elementFromPoint. If the topmost
+  // element at that point isn't this element (nor an ancestor/descendant of it),
+  // something is painted over it - typically a modal, cookie banner, or toast - and a
+  // click would be intercepted. Returns the covering element's tag, or null when
+  // unoccluded or untestable (elementFromPoint only works for points inside the
+  // viewport, so an element scrolled out of view can't be hit-tested and is treated
+  // as unoccluded).
   function occludingTag(el, rect) {
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
@@ -86,7 +86,8 @@
     return text.trim().slice(0, 120);
   }
 
-  // Reset the live element cache from any previous observation before reassigning.
+  // Drop the previous observation's handles - stale entries here would resolve to
+  // detached nodes that are no longer on the page.
   window.__webagentElements = [];
 
   const elements = [];

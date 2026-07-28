@@ -41,13 +41,10 @@ _SETTLE_TIMEOUT_MS = 1000
 
 
 class ElementNotFoundError(Exception):
-    """Raised when an action's index no longer resolves to a live element.
+    """Raised when an action's index no longer resolves to a live element on the page.
 
-    Checked eagerly via an element-handle lookup plus an isConnected check (both
-    instant, no waiting) rather than letting a doomed click()/fill()/select_option()
-    run out Playwright's full actionability timeout - the index was cached during a
-    prior observe() and may be stale by the time an action executes (e.g. the page
-    re-rendered and the referenced node was removed in between).
+    Indices are cached during an observation, so they can go stale before the action
+    using them runs - e.g. the page re-rendered and the referenced node was removed.
     """
 
     def __init__(self, index: int) -> None:
@@ -140,7 +137,7 @@ class BrowserController:
             window_start = max(0, match_start - _SEARCH_CONTEXT_CHARS)
             window_end = min(len(text), match_end + _SEARCH_CONTEXT_CHARS)
             if window_start < last_window_end:
-                continue  # skip matches whose context overlaps a snippet already included
+                continue
             snippets.append(text[window_start:window_end].strip())
             last_window_end = window_end
 
@@ -163,6 +160,9 @@ class BrowserController:
             pass
 
     async def _resolve_handle(self, index: int) -> ElementHandle:
+        # Staleness is checked eagerly (handle lookup + isConnected, both instant) rather
+        # than letting a doomed click()/fill()/select_option() run out Playwright's full
+        # actionability timeout against an element that is already gone.
         handle = await self._page.evaluate_handle(
             "(index) => (window.__webagentElements || [])[index] ?? null", index
         )

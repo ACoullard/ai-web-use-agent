@@ -1,5 +1,4 @@
-"""Durable, human- and AI-legible traces of an agent run.
-"""
+"""Durable, human- and AI-legible traces of an agent run."""
 
 from webagent.traces.server import serve
 from webagent.traces.trace import (

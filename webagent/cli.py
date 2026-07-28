@@ -200,7 +200,7 @@ def trace_list(
     status: Optional[str] = typer.Option(None, "--status", help="Exact status filter."),
     fixture: Optional[str] = typer.Option(None, "--fixture", help="Exact fixture-id filter."),
     run_id: Optional[str] = typer.Option(None, "--run", help="Exact eval run-id filter."),
-    fmt: str = typer.Option("human", "--format", help="human (table) or agent (markdown for Claude)."),
+    fmt: str = typer.Option("human", "--format", help="human (table) or agent (markdown for an LLM)."),
 ) -> None:
     """List traces under $TRACES_DIR (live + evals), newest first, with optional filters."""
     traces = filter_traces(
@@ -220,7 +220,7 @@ def trace_show(
     trace_id: str = typer.Argument(..., help="Trace id (or unambiguous prefix), or a path to a trace JSON file."),
     step: Optional[int] = typer.Option(None, "--step", help="Focus a single step, fully expanded."),
     raw: bool = typer.Option(False, "--raw", help="Expand full input/output/reasoning (no truncation)."),
-    fmt: str = typer.Option("human", "--format", help="human or agent (untruncated markdown for Claude)."),
+    fmt: str = typer.Option("human", "--format", help="human or agent (untruncated markdown for an LLM)."),
 ) -> None:
     """Show one trace's step timeline, distinguishing generation vs tool observations."""
     root = traces_root()

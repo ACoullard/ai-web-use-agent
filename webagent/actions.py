@@ -149,14 +149,13 @@ BrowserAction = Annotated[Union[_BROWSER_ACTION_TYPES], Field(discriminator="typ
 
 
 def resolve_action_type(answer_model: Any | None) -> type:
-    """Resolve the Action union to use for a run_task() call: BrowserAction plus a finish variant.
+    """Build the Action union for one run: every BrowserAction plus a finish variant.
 
-    With no answer_model, the finish variant is just the static FinishAction above
-    (answer: str). With an answer_model (from a caller-supplied output schema/
-    description) - a BaseModel for object schemas, or a generic alias like
-    `list[SomeModel]` for a top-level array schema - a fresh finish variant is built
-    for this call whose `answer` field is typed to match. Since it's a new class each
-    time, callers must check `action.type == "finish"` rather than
+    With no `answer_model`, the finish variant is the static `FinishAction` above
+    (answer: str). With an `answer_model` - a BaseModel for object schemas, or a generic
+    alias like `list[SomeModel]` for a top-level array schema - a fresh finish variant is
+    built whose `answer` field is typed to match. Since that is a new class each time,
+    callers must check `action.type == "finish"` rather than
     `isinstance(action, FinishAction)`.
     """
     if answer_model is None:

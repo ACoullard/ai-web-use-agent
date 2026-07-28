@@ -43,9 +43,9 @@ def _partial_match(expected: Any, actual: Any) -> bool:
     in `actual`; extra keys in `actual` are ignored. Falls back to `==` for non-dict
     values (including lists - no fuzzy list matching).
 
-    This is deliberately not full equality: json_schema_to_model gives every
-    non-required schema property a `None` default, so a successful answer always
-    dumps every schema property, including ones a fixture author never asserted on.
+    Deliberately not full equality: a schema-shaped answer carries every property the
+    schema declares, optional ones included as `None`, so requiring exact equality would
+    force fixture authors to assert on properties they don't care about.
     """
     if isinstance(expected, dict):
         return isinstance(actual, dict) and all(

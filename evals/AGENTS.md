@@ -64,9 +64,8 @@ source.
 
 ## Traces
 
-`evals run` records one trace per fixture run under `--trace-dir` (default `evals/runs/traces/`,
-gitignored via `runs/`; `--no-trace` to skip). Each trace is stamped with `fixture_id` and the
-suite's `run_id`, so after a run you can slice them with the top-level `webagent trace` commands
-— e.g. `webagent trace list --fixture <id> --format agent` for a Claude-readable digest of a
-fixture's runs, or `webagent trace serve --trace-dir evals/runs/traces` to browse. See the
-top-level `AGENTS.md` for the trace model.
+`evals run` records one trace per fixture run under `$TRACES_DIR/evals` (`--no-trace` to
+skip). Each trace is stamped with `fixture_id` and the suite's `run_id`, so after a run you
+can slice them with the top-level `webagent trace` commands — e.g. `webagent trace list
+--fixture <id> --format agent` for an AI-readable digest of a fixture's runs, or
+`webagent trace serve` to browse. See `webagent/traces/AGENTS.md` for the trace model.

@@ -1,13 +1,12 @@
 """A tiny, dependency-free local website for browsing traces on disk.
 
-`webagent trace serve` starts a stdlib HTTP server bound to loopback that serves the static
-page in `webagent/traces/web/` plus a small read-only JSON API over the same
-`webagent.traces.trace` functions. The page has two levels: a filterable/sortable list of runs, and a drill-down
-detail view of one run's step timeline (generation vs tool observations, expandable to the
-exact input/reasoning/output).
+A stdlib HTTP server bound to loopback serves the static page in `web/` plus a small
+read-only JSON API over the traces in a directory. The page has two levels: a
+filterable/sortable list of runs, and a drill-down detail view of one run's step timeline
+(generation vs tool observations, expandable to the exact input/reasoning/output).
 
-Request routing lives in `handle_request()` (pure: path -> status/content-type/body) so it can
-be unit-tested without opening a socket; the HTTP handler is a thin adapter over it.
+Path resolution is kept pure - path in, (status, content-type, body) out - so it can be
+unit-tested without opening a socket; the HTTP handler is a thin adapter over it.
 """
 
 import json
