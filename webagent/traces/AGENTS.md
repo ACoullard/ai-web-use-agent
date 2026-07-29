@@ -64,9 +64,3 @@ only places a trace directory is named.
   routing and the JSON API.
 
 `--format agent` emits markdown built for an LLM to read when iterating on prompts.
-
-## Gotcha: empty reasoning text
-
-Reasoning may be empty even when the model reasoned — OpenAI reasoning models return it
-**encrypted**. Traces flag this via `reasoning_encrypted`/`reasoning_tokens`. Set
-`openai_reasoning_summary` or use an Anthropic model to see the text.

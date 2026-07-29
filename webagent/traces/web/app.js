@@ -70,7 +70,7 @@ function reasoningNote(g) {
   if (g.reasoning) return esc(g.reasoning);
   if (g.reasoning_encrypted || g.reasoning_tokens) {
     const tok = g.reasoning_tokens ? `${g.reasoning_tokens} reasoning tokens; ` : "";
-    return `<span class="muted">&lt;withheld by provider — ${tok}set openai_reasoning_summary or use an Anthropic model&gt;</span>`;
+    return `<span class="muted">&lt;withheld by provider — ${tok}no reasoning summary returned&gt;</span>`;
   }
   return null;
 }

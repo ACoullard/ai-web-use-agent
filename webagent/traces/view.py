@@ -26,7 +26,7 @@ def _reasoning_note(gen: Generation) -> str | None:
         return gen.reasoning
     if gen.reasoning_encrypted or gen.reasoning_tokens:
         tokens = f"{gen.reasoning_tokens} reasoning tokens; " if gen.reasoning_tokens else ""
-        return f"<withheld by provider — {tokens}set openai_reasoning_summary or use an Anthropic model>"
+        return f"<withheld by provider — {tokens}no reasoning summary returned>"
     return None
 
 

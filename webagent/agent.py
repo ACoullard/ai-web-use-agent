@@ -12,7 +12,13 @@ from webagent.actions import resolve_action_type
 from webagent.browser import BrowserController, ElementNotFoundError
 from webagent.output_spec import generic_answer_model, json_schema_to_model, self_check
 from webagent.page_snapshot import PageSnapshot
-from webagent.providers import DEFAULT_MODEL, DEFAULT_THINKING, check_model_config, resolve_thinking
+from webagent.providers import (
+    DEFAULT_MODEL,
+    DEFAULT_THINKING,
+    build_model_settings,
+    check_model_config,
+    resolve_thinking,
+)
 from webagent.result import AgentResult
 from webagent.traces import NullTracer, Tracer
 
@@ -118,6 +124,7 @@ async def run_task(
         )
 
     check_model_config(model)
+    model_settings = build_model_settings(model, thinking)
 
     run_started = time.monotonic()
     recording = (tracer or NullTracer()).start(
@@ -147,7 +154,7 @@ async def run_task(
         model,
         output_type=action_type,
         system_prompt=system_prompt,
-        model_settings={"thinking": thinking},
+        model_settings=model_settings,
         retries={"tools": 1, "output": max_reask_attempts},
     )
 
@@ -202,13 +209,16 @@ async def run_task(
                 # output_description mode: structurally valid ({"result": ...}), but
                 # still needs a semantic self-check against the caller's description.
                 sc_started = time.monotonic()
-                verdict = await self_check(task, output_description, action.answer.result, model)
+                sc_result = await self_check(
+                    task, output_description, action.answer.result, model, model_settings
+                )
+                verdict = sc_result.output
                 sc_input = (
                     "Does the produced result satisfy the expected output description?\n"
                     f"Description: {output_description}\n"
                     f"Result: {json.dumps(action.answer.result, default=str)}"
                 )
-                recording.record_self_check(step, sc_input, verdict, time.monotonic() - sc_started)
+                recording.record_self_check(step, sc_input, sc_result, time.monotonic() - sc_started)
                 if verdict.passes:
                     logger.info("finished after %d steps, self-check passed", step + 1)
                     return _persist(

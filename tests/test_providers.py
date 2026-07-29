@@ -3,6 +3,7 @@ import pytest
 from webagent.providers import (
     ProviderConfigError,
     ThinkingLevel,
+    build_model_settings,
     check_model_config,
     resolve_thinking,
 )
@@ -49,3 +50,18 @@ def test_resolve_thinking(level, expected):
     result = resolve_thinking(level)
     assert result == expected
     assert type(result) is type(expected)
+
+
+def test_build_model_settings_requests_openai_reasoning_summary():
+    settings = build_model_settings("openai:gpt-5.6-terra", "medium")
+    assert settings == {"thinking": "medium", "openai_reasoning_summary": "auto"}
+
+
+def test_build_model_settings_omits_summary_with_thinking_off():
+    # nothing to summarize when reasoning is off, and `summary` alongside effort "none" is meaningless
+    assert build_model_settings("openai:gpt-5.6-terra", False) == {"thinking": False}
+
+
+def test_build_model_settings_anthropic_needs_only_thinking():
+    # Anthropic returns thinking text directly, so there's no summary setting to send
+    assert build_model_settings("anthropic:claude-sonnet-5", "medium") == {"thinking": "medium"}

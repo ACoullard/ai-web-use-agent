@@ -186,7 +186,16 @@ class TraceRecorder:
         self.observations: list[Observation] = []
 
     def record_generation(self, step: int, input_prompt: str, result: Any, duration: float) -> None:
-        """Record the decide-next-action call. A single `agent.run()` can produce more than
+        """Record the decide-next-action call."""
+        self._record_llm_call("decide_action", step, input_prompt, result, duration)
+
+    def record_self_check(self, step: int, input_prompt: str, result: Any, duration: float) -> None:
+        """Record the output self-check LLM call. It's an `agent.run()` like any other, so its
+        reasoning, verdict and token counts are read off the result the same way."""
+        self._record_llm_call("self_check", step, input_prompt, result, duration)
+
+    def _record_llm_call(self, name: str, step: int, input_prompt: str, result: Any, duration: float) -> None:
+        """Turn one `agent.run()` result into `Generation`s. A single run can produce more than
         one `ModelResponse` when Pydantic AI retries on output validation; we record one
         `Generation` per response so retries are visible, the last carrying the final output."""
         messages = result.new_messages()
@@ -209,7 +218,7 @@ class TraceRecorder:
                 output = _attempted_output(response)
             self.observations.append(
                 Generation(
-                    name="decide_action",
+                    name=name,
                     step=step,
                     # the whole turn's latency lands on the response that actually produced
                     # the accepted output; intermediate retries within it aren't separately timed
@@ -226,20 +235,6 @@ class TraceRecorder:
                     provider_response_id=response.provider_response_id,
                 )
             )
-
-    def record_self_check(self, step: int, input_prompt: str, verdict: Any, duration: float) -> None:
-        """Record the output self-check LLM call. Only the verdict is recorded; token counts
-        and reasoning are not part of what this call reports back."""
-        self.observations.append(
-            Generation(
-                name="self_check",
-                step=step,
-                duration_seconds=duration,
-                model=self.model,
-                input_prompt=input_prompt,
-                output=verdict.model_dump(mode="json") if hasattr(verdict, "model_dump") else verdict,
-            )
-        )
 
     def record_tool(
         self,
@@ -301,7 +296,7 @@ class Recording(Protocol):
 
     def record_generation(self, step: int, input_prompt: str, result: Any, duration: float) -> None: ...
 
-    def record_self_check(self, step: int, input_prompt: str, verdict: Any, duration: float) -> None: ...
+    def record_self_check(self, step: int, input_prompt: str, result: Any, duration: float) -> None: ...
 
     def record_tool(
         self,
@@ -348,7 +343,7 @@ class NullRecording:
     def record_generation(self, step: int, input_prompt: str, result: Any, duration: float) -> None:
         pass
 
-    def record_self_check(self, step: int, input_prompt: str, verdict: Any, duration: float) -> None:
+    def record_self_check(self, step: int, input_prompt: str, result: Any, duration: float) -> None:
         pass
 
     def record_tool(self, action: Any, step: int, duration: float, **kwargs: Any) -> None:

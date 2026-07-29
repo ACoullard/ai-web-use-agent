@@ -133,13 +133,28 @@ def test_record_tool_ok_and_error():
     assert err.status == "error" and err.error == "no element 7" and err.result is None
 
 
-def test_record_self_check():
+def test_record_self_check_captures_verdict_reasoning_and_tokens():
+    request = ModelRequest(parts=[UserPromptPart(content="does it satisfy?")])
+    response = ModelResponse(
+        parts=[
+            ThinkingPart(content="the answer names a concrete price"),
+            ToolCallPart(tool_name="final_result", args={"passes": True, "reason": "looks good"}),
+        ],
+        usage=RequestUsage(input_tokens=30, output_tokens=8, details={"reasoning_tokens": 12}),
+    )
     rec = _recorder()
-    rec.record_self_check(3, "does it satisfy?", SelfCheckVerdict(passes=True, reason="looks good"), 0.4)
+    rec.record_self_check(
+        3,
+        "does it satisfy?",
+        _FakeResult([request, response], SelfCheckVerdict(passes=True, reason="looks good")),
+        0.4,
+    )
 
     gen = rec.observations[0]
     assert gen.name == "self_check"
     assert gen.output == {"passes": True, "reason": "looks good"}
+    assert gen.reasoning == "the answer names a concrete price"
+    assert (gen.input_tokens, gen.output_tokens, gen.reasoning_tokens) == (30, 8, 12)
 
 
 def test_finish_sums_tokens_and_carries_metadata():

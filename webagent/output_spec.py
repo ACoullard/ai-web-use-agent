@@ -2,7 +2,7 @@ import json
 from typing import Any, Literal, Union
 
 from pydantic import BaseModel, create_model
-from pydantic_ai import Agent
+from pydantic_ai import Agent, AgentRunResult
 
 _UNSUPPORTED_KEYWORDS = ("$ref", "oneOf", "anyOf", "allOf")
 
@@ -102,11 +102,22 @@ class SelfCheckVerdict(BaseModel):
     reason: str
 
 
-async def self_check(task: str, description: str, result: Any, model: str) -> SelfCheckVerdict:
-    """Lightweight LLM-judge check: does `result` satisfy the caller's NL description?"""
+async def self_check(
+    task: str,
+    description: str,
+    result: Any,
+    model: str,
+    model_settings: dict[str, Any] | None = None,
+) -> AgentRunResult[SelfCheckVerdict]:
+    """Lightweight LLM-judge check: does `result` satisfy the caller's NL description?
+
+    Returns the whole run result, not just `.output`, so the caller can trace the judge's
+    reasoning and token usage alongside its verdict.
+    """
     checker: Agent[None, SelfCheckVerdict] = Agent(
         model,
         output_type=SelfCheckVerdict,
+        model_settings=model_settings,
         system_prompt=(
             "You are grading whether a web-browsing agent's final answer satisfies its "
             "task and the caller's expected-output description. Set passes=true only if "
@@ -121,5 +132,4 @@ async def self_check(task: str, description: str, result: Any, model: str) -> Se
         f"Produced result: {json.dumps(result, default=str)}\n\n"
         "Does the produced result satisfy the expected output description?"
     )
-    verdict = await checker.run(prompt)
-    return verdict.output
+    return await checker.run(prompt)
