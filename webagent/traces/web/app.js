@@ -2,8 +2,10 @@ const app = document.getElementById("app");
 let traces = [];
 let sortKey = "created_at", sortDir = -1;
 
-const esc = s => String(s ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const short = id => (id || "").slice(0, 8);
+// clip before escaping, so a cut never lands inside an entity
+const clip = (s, n) => s.length > n ? s.slice(0, n) + "…" : s;
 
 async function boot() {
   traces = await (await fetch("/api/traces")).json();
@@ -47,7 +49,7 @@ function renderList() {
         <td>${esc(t.model)}</td>
         <td>${esc(t.thinking)}</td>
         <td>${esc(t.fixture_id||"-")}</td>
-        <td class="task">${esc(t.task)}</td>
+        <td class="task"><span title="${esc(t.task)}">${esc(t.task)}</span></td>
         <td class="muted">${t.total_input_tokens}/${t.total_output_tokens}</td>
       </tr>`).join("")}</tbody></table>`;
   app.querySelectorAll("[data-f]").forEach(el => {
@@ -82,12 +84,14 @@ function obsCard(o) {
     return `<div class="obs gen">
       <div class="obs-hd"><span class="kind">◆ generation</span>
         <span>[${esc(o.name)}]</span>
-        <span class="muted">→ ${esc(asText(o.output)).slice(0,90)}</span>
+        <span class="muted">→ ${esc(clip(asText(o.output), 90))}</span>
         <span class="muted" style="margin-left:auto">${o.duration_seconds.toFixed(1)}s</span></div>
       <div class="obs-body">
         ${rn !== null ? `<div class="field-label">reasoning</div><pre>${rn}</pre>` : ""}
         <div class="field-label">action / output</div><pre>${esc(asText(o.output))}</pre>
-        <div class="field-label">input prompt</div><pre>${esc(o.input_prompt)}</pre>
+        <details class="fold"><summary class="field-label">input prompt
+          <span class="muted">(${o.input_prompt.length} chars)</span></summary>
+          <pre>${esc(o.input_prompt)}</pre></details>
         <div class="muted">model=${esc(o.model)} · tokens in=${o.input_tokens} out=${o.output_tokens}${
           o.reasoning_tokens ? " reasoning="+o.reasoning_tokens : ""} · finish=${esc(o.finish_reason||"-")}</div>
       </div></div>`;

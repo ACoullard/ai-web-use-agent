@@ -10,7 +10,8 @@ table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #8883; white-space: nowrap; }
 th { cursor: pointer; user-select: none; position: sticky; top: 0; background: Canvas; }
 tbody tr:hover { background: #8881; cursor: pointer; }
-td.task { white-space: normal; max-width: 40ch; }
+/* one line, ellipsised: a block child is what makes max-width bind in table layout */
+td.task span { display: block; max-width: 60ch; overflow: hidden; text-overflow: ellipsis; }
 .status-success { color: #16a34a; }
 .status-validation_failed, .status-max_steps_exceeded, .status-error { color: #dc2626; }
 .muted { opacity: .65; }
@@ -27,5 +28,7 @@ td.task { white-space: normal; max-width: 40ch; }
                 border-radius: 5px; margin: .3rem 0; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; }
 .err { color: #dc2626; }
 .field-label { font-weight: 600; margin-top: .5rem; }
+details.fold > summary { cursor: pointer; user-select: none; }
+details.fold > summary:hover { text-decoration: underline; }
 .meta { margin: 0 0 1rem; }
 .meta div { margin: .1rem 0; }
