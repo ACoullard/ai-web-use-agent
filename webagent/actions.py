@@ -10,8 +10,22 @@ _INDEX_DESCRIPTION = (
     "an index from an earlier step."
 )
 
+_MEMORY_DESCRIPTION = (
+    "One or two sentences recording what the last action accomplished and where you "
+    "are in the task overall. Only the few most recent observations stay in your "
+    "context - older pages are replaced by a placeholder, so anything you do not "
+    "write down here is lost. Always carry counts for multi-item tasks, e.g. "
+    "'added Blue Top, 1 of 2 products done'."
+)
 
-class ClickAction(BaseModel):
+
+class Action(BaseModel):
+    """Base for every action: carries the running progress notes."""
+
+    memory: str = Field(description=_MEMORY_DESCRIPTION)
+
+
+class ClickAction(Action):
     """Click an interactive element: a link, button, checkbox, radio button, or similar.
 
     Use this to follow a link, submit a form, or toggle a checkbox/radio from the
@@ -24,7 +38,7 @@ class ClickAction(BaseModel):
     index: int = Field(description=_INDEX_DESCRIPTION)
 
 
-class TypeAction(BaseModel):
+class TypeAction(Action):
     """Fill a text input, textarea, or contenteditable element with a given value.
 
     This replaces the element's current value entirely - it does not append to
@@ -38,7 +52,7 @@ class TypeAction(BaseModel):
     text: str = Field(description="The full text to enter into the field, replacing any existing value.")
 
 
-class SelectAction(BaseModel):
+class SelectAction(Action):
     """Choose an option in a <select> dropdown element.
 
     Only use this on an element whose observation entry lists `options=[...]` -
@@ -57,7 +71,7 @@ class SelectAction(BaseModel):
     )
 
 
-class ScrollAction(BaseModel):
+class ScrollAction(Action):
     """Scroll the page up or down.
 
     Note: the 'Interactive elements' list already includes elements anywhere on the
@@ -71,7 +85,7 @@ class ScrollAction(BaseModel):
     direction: Literal["up", "down"] = Field(description="Which direction to scroll.")
 
 
-class SearchPageTextAction(BaseModel):
+class SearchPageTextAction(Action):
     """Search the full page text for a keyword or phrase.
 
     Use this when you need one specific fact from a page whose text summary was
@@ -89,7 +103,7 @@ class SearchPageTextAction(BaseModel):
     )
 
 
-class ReadMoreTextAction(BaseModel):
+class ReadMoreTextAction(Action):
     """Continue reading the page's full text sequentially from where the last
     summary or read_more_text call left off.
 
@@ -100,7 +114,7 @@ class ReadMoreTextAction(BaseModel):
     type: Literal["read_more_text"] = "read_more_text"
 
 
-class NavigateAction(BaseModel):
+class NavigateAction(Action):
     """Go directly to a URL, bypassing element clicks.
 
     Use this when you already know the destination URL - e.g. an element's `href` in
@@ -112,7 +126,7 @@ class NavigateAction(BaseModel):
     url: str = Field(description="A fully-qualified URL to navigate to, e.g. https://example.com/page.")
 
 
-class GoBackAction(BaseModel):
+class GoBackAction(Action):
     """Return to the previous page in browser history, like clicking the browser's back button.
 
     Use this to back out of a page that turned out to be a dead end, without having to
@@ -122,7 +136,7 @@ class GoBackAction(BaseModel):
     type: Literal["go_back"] = "go_back"
 
 
-class FinishAction(BaseModel):
+class FinishAction(Action):
     """Signal that the task is complete and report the final answer.
 
     Call this exactly once, as soon as you have the information the task asked for -
@@ -163,6 +177,7 @@ def resolve_action_type(answer_model: Any | None) -> type:
     else:
         finish_action = create_model(
             "FinishAction",
+            __base__=Action,
             __doc__=(
                 "Signal that the task is complete and report the final answer. Call this "
                 "exactly once, as soon as you have the information the task asked for - "

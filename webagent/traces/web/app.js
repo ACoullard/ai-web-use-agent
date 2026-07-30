@@ -88,6 +88,7 @@ function obsCard(o) {
         <span class="muted" style="margin-left:auto">${o.duration_seconds.toFixed(1)}s</span></div>
       <div class="obs-body">
         ${rn !== null ? `<div class="field-label">reasoning</div><pre>${rn}</pre>` : ""}
+        ${o.memory ? `<div class="field-label">memory</div><pre>${esc(o.memory)}</pre>` : ""}
         <div class="field-label">action / output</div><pre>${esc(asText(o.output))}</pre>
         <details class="fold"><summary class="field-label">input prompt
           <span class="muted">(${o.input_prompt.length} chars)</span></summary>

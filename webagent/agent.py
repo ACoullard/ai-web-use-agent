@@ -6,10 +6,17 @@ from typing import Any
 from playwright.async_api import Error as PlaywrightError
 from pydantic import TypeAdapter
 from pydantic_ai import Agent
-from pydantic_ai.messages import ModelMessage, ModelResponse, NativeToolCallPart, ToolCallPart
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelResponse,
+    NativeToolCallPart,
+    ToolCallPart,
+    UserPromptPart,
+)
 
 from webagent.actions import resolve_action_type
 from webagent.browser import BrowserController, ElementNotFoundError
+from webagent.config import request_capture_path
 from webagent.output_spec import generic_answer_model, json_schema_to_model, self_check
 from webagent.page_snapshot import PageSnapshot
 from webagent.providers import (
@@ -20,11 +27,28 @@ from webagent.providers import (
     resolve_thinking,
 )
 from webagent.result import AgentResult
-from webagent.traces import NullTracer, Tracer
+from webagent.traces import CapturingModel, NullTracer, Tracer
 
 logger = logging.getLogger(__name__)
 
 _SUMMARY_PREVIEW_CHARS = 200
+
+# How many observations the model sees verbatim per request, counting the current one.
+# Everything older is replaced by _AGED_OBSERVATION_STUB; the agent carries what it still
+# needs forward in each action's `memory` field.
+_HISTORY_WINDOW = 2
+
+# Marks the start of an observation inside a user prompt. Anything a step prepended
+# before it (a reask note, a failed-action note) is worth keeping, so the stub replaces
+# only the observation itself - see _stub_aged_observations.
+_OBSERVATION_MARKER = "Page title: "
+_AGED_NOTE_MAX_CHARS = 200
+
+_AGED_OBSERVATION_STUB = (
+    "[Page state from an earlier step, omitted to save context. Element indices from "
+    "it are stale and no longer valid. What you recorded in `memory` is your record of "
+    "what happened here.]"
+)
 
 SYSTEM_PROMPT_TEMPLATE = """\
 You are a web browsing agent. Your task is:
@@ -44,6 +68,13 @@ On each turn, respond with exactly one action:
 - read_more_text(): keep reading the page's full text sequentially, continuing from
   where the summary or the last read_more_text() call left off
 - finish(answer): call this once you have completed the task, with your final answer
+
+Every action also takes a `memory` field. Only the {history_window} most recent observations stay
+in your context - older ones are replaced by a placeholder, so `memory` is the only
+record you keep of earlier steps. Use it to note what the last action achieved and how
+far along the task is, and always carry a count when the task asks for several of
+something ("added 1 of 2 products"). Re-read your own last `memory` before deciding: it
+tells you what you have already done, and the task above tells you what is still left.
 
 Only refer to element indices that appear in the most recent observation - they change every step.
 Call finish() as soon as you have the answer; do not keep browsing after you know the answer.
@@ -72,6 +103,38 @@ def _truncate(text: str, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text
     return text[:max_chars].rstrip() + "..."
+
+
+def _stub_aged_observations(
+    messages: list[ModelMessage], keep_last: int = _HISTORY_WINDOW - 1
+) -> list[ModelMessage]:
+    """Replace all but the `keep_last` most recent observations with a short stub.
+
+    Rewrites the user prompts in place rather than dropping messages: slicing a
+    message list risks orphaning a tool call from its result, or a reasoning item
+    from the call it belongs to, which providers reject. Editing in place keeps every
+    request/response pair intact and only shrinks what it holds.
+
+    Idempotent - the loop feeds the returned list back in as history each step, so an
+    observation stubbed once stays stubbed and only the newly aged-out one is
+    rewritten per step.
+    """
+    seen = 0
+    for message in reversed(messages):
+        for part in reversed(message.parts):
+            if not isinstance(part, UserPromptPart) or not isinstance(part.content, str):
+                continue
+            marker = part.content.find(_OBSERVATION_MARKER)
+            if marker == -1:
+                continue  # a note with no observation attached; leave it alone
+            seen += 1
+            if seen <= keep_last:
+                continue
+            note = part.content[:marker]
+            if len(note) > _AGED_NOTE_MAX_CHARS:
+                note = note[:_AGED_NOTE_MAX_CHARS].rstrip() + "... "
+            part.content = note + _AGED_OBSERVATION_STUB
+    return messages
 
 
 def _log_model_response(response: ModelResponse) -> None:
@@ -109,7 +172,11 @@ async def run_task(
         answer_model = generic_answer_model()
         answer_instructions = _DESCRIPTION_ANSWER_INSTRUCTIONS.format(description=output_description)
 
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(task=task, answer_instructions=answer_instructions)
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
+        task=task,
+        answer_instructions=answer_instructions,
+        history_window=_HISTORY_WINDOW,
+    )
 
     if dry_run:
         browser = await BrowserController.launch(headless=headless)
@@ -150,21 +217,25 @@ async def run_task(
 
     action_type = resolve_action_type(answer_model)
 
+    browser = await BrowserController.launch(headless=headless)
+    message_history: list[ModelMessage] | None = None
+    step = 0
+    reask_attempts_used = 0
+    pending_reask_note: str | None = None
+
+    capture_path = request_capture_path(recording.trace_id) if recording.trace_id else None
+    model_to_run = CapturingModel(model, capture_path, lambda: step) if capture_path else model
+
     agent: Agent[None, Any] = Agent(
-        model,
+        model_to_run,
         output_type=action_type,
         system_prompt=system_prompt,
         model_settings=model_settings,
         retries={"tools": 1, "output": max_reask_attempts},
     )
 
-    browser = await BrowserController.launch(headless=headless)
-    message_history: list[ModelMessage] | None = None
-    reask_attempts_used = 0
-    pending_reask_note: str | None = None
     try:
         await browser.goto(url)
-        step = 0
         while step < max_steps:
             observation = await browser.observe()
             logger.info("step %d elements:\n%s", step, _format_elements(observation))
@@ -187,8 +258,9 @@ async def run_task(
                 if isinstance(message, ModelResponse):
                     _log_model_response(message)
             recording.record_generation(step, prompt, result, gen_duration)
-            message_history = result.new_messages()
+            message_history = _stub_aged_observations(result.all_messages())
             action = result.output
+            logger.debug("step %d memory: %s", step, action.memory)
             logger.info("step %d action: %r", step, action)
 
             if action.type == "finish":

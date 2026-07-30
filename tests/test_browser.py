@@ -37,7 +37,7 @@ def test_click_basic_roundtrip(tmp_path):
             )
             await browser.goto(html_path.as_uri())
             observation = await browser.observe()
-            await browser.execute(ClickAction(index=_button_index(observation)))
+            await browser.execute(ClickAction(index=_button_index(observation), memory=""))
             assert await browser._page.title() == "clicked"
 
     asyncio.run(_test())
@@ -66,7 +66,7 @@ def test_click_survives_in_place_mutation(tmp_path):
                 "b.className = 'rerendered'; b.setAttribute('data-something-else', '1'); }"
             )
 
-            await browser.execute(ClickAction(index=index))
+            await browser.execute(ClickAction(index=index, memory=""))
             assert await browser._page.title() == "clicked"
 
     asyncio.run(_test())
@@ -91,7 +91,7 @@ def test_click_raises_when_node_replaced(tmp_path):
             )
 
             with pytest.raises(ElementNotFoundError):
-                await browser.execute(ClickAction(index=index))
+                await browser.execute(ClickAction(index=index, memory=""))
             assert await browser._page.title() != "clicked"
 
     asyncio.run(_test())
@@ -188,7 +188,7 @@ def test_type_action_roundtrip(tmp_path):
             html_path.write_text("<input type='text' />")
             await browser.goto(html_path.as_uri())
             observation = await browser.observe()
-            await browser.execute(TypeAction(index=_input_index(observation), text="hello"))
+            await browser.execute(TypeAction(index=_input_index(observation), text="hello", memory=""))
             value = await browser._page.eval_on_selector("input", "el => el.value")
             assert value == "hello"
 
@@ -221,10 +221,10 @@ def test_search_page_text_finds_match_with_context(tmp_path):
             html_path.write_text(_long_text_html(TEXT_SUMMARY_CHARS + 500) + "<p>needle-phrase found here</p>")
             await browser.goto(html_path.as_uri())
             await browser.observe()
-            result = await browser.execute(SearchPageTextAction(query="needle-phrase"))
+            result = await browser.execute(SearchPageTextAction(query="needle-phrase", memory=""))
             assert "needle-phrase found here" in result
 
-            miss = await browser.execute(SearchPageTextAction(query="not-present-anywhere"))
+            miss = await browser.execute(SearchPageTextAction(query="not-present-anywhere", memory=""))
             assert "No matches" in miss
 
     asyncio.run(_test())
@@ -239,12 +239,12 @@ def test_search_page_text_supports_or_query(tmp_path):
             await browser.goto(html_path.as_uri())
             await browser.observe()
 
-            result = await browser.execute(SearchPageTextAction(query="alpha-marker|beta-marker"))
+            result = await browser.execute(SearchPageTextAction(query="alpha-marker|beta-marker", memory=""))
             assert "2 match(es)" in result
             assert "alpha-marker" in result
             assert "beta-marker" in result
 
-            miss = await browser.execute(SearchPageTextAction(query="nope-1|nope-2"))
+            miss = await browser.execute(SearchPageTextAction(query="nope-1|nope-2", memory=""))
             assert "No matches" in miss
 
     asyncio.run(_test())
@@ -261,7 +261,7 @@ def test_search_page_text_merges_nearby_or_matches_into_one_snippet(tmp_path):
             await browser.goto(html_path.as_uri())
             await browser.observe()
 
-            result = await browser.execute(SearchPageTextAction(query="alpha-marker|beta-marker"))
+            result = await browser.execute(SearchPageTextAction(query="alpha-marker|beta-marker", memory=""))
             header, _, body = result.partition("\n\n")
             assert "1 match(es)" in header
             assert body.count("alpha-marker") == 1
@@ -278,16 +278,16 @@ def test_read_more_text_paginates_and_resets_on_navigation(tmp_path):
             await browser.goto(html_path.as_uri())
             await browser.observe()
 
-            first_chunk = await browser.execute(ReadMoreTextAction())
+            first_chunk = await browser.execute(ReadMoreTextAction(memory=""))
             assert len(first_chunk) == TEXT_SUMMARY_CHARS
-            second_chunk = await browser.execute(ReadMoreTextAction())
+            second_chunk = await browser.execute(ReadMoreTextAction(memory=""))
             assert second_chunk != first_chunk
 
             other_path = tmp_path / "other.html"
             other_path.write_text("<body>short page</body>")
             await browser.goto(other_path.as_uri())
             await browser.observe()
-            reset_chunk = await browser.execute(ReadMoreTextAction())
+            reset_chunk = await browser.execute(ReadMoreTextAction(memory=""))
             assert "No more text remaining" in reset_chunk
 
     asyncio.run(_test())

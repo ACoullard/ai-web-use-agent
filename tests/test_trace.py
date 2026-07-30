@@ -61,7 +61,7 @@ def test_record_generation_extracts_reasoning_action_and_tokens():
         provider_response_id="resp_1",
     )
     rec = _recorder()
-    rec.record_generation(0, "observe the page", _FakeResult([request, response], ClickAction(index=4)), 1.5)
+    rec.record_generation(0, "observe the page", _FakeResult([request, response], ClickAction(index=4, memory="clicked Pricing, 1 of 2 done")), 1.5)
 
     assert len(rec.observations) == 1
     gen = rec.observations[0]
@@ -69,7 +69,8 @@ def test_record_generation_extracts_reasoning_action_and_tokens():
     assert gen.name == "decide_action"
     assert gen.reasoning == "the Pricing link is element 4"
     assert gen.reasoning_encrypted is False
-    assert gen.output == {"type": "click", "index": 4}
+    assert gen.output == {"type": "click", "index": 4}  # memory promoted out of the action
+    assert gen.memory == "clicked Pricing, 1 of 2 done"
     assert (gen.input_tokens, gen.output_tokens, gen.reasoning_tokens) == (100, 20, 15)
     assert gen.finish_reason == "stop"
     assert gen.provider_response_id == "resp_1"
@@ -87,7 +88,7 @@ def test_record_generation_flags_encrypted_reasoning():
         usage=RequestUsage(input_tokens=10, output_tokens=5, details={"reasoning_tokens": 42}),
     )
     rec = _recorder()
-    rec.record_generation(0, "p", _FakeResult([request, response], ClickAction(index=1)), 0.5)
+    rec.record_generation(0, "p", _FakeResult([request, response], ClickAction(index=1, memory="")), 0.5)
 
     gen = rec.observations[0]
     assert gen.reasoning is None
@@ -108,7 +109,7 @@ def test_record_generation_records_one_per_response_on_retry():
     )
     rec = _recorder()
     rec.record_generation(
-        0, "first prompt", _FakeResult([req1, resp_failed, req_retry, resp_ok], ClickAction(index=4)), 2.0
+        0, "first prompt", _FakeResult([req1, resp_failed, req_retry, resp_ok], ClickAction(index=4, memory="retried")), 2.0
     )
 
     assert len(rec.observations) == 2
@@ -124,8 +125,8 @@ def test_record_generation_records_one_per_response_on_retry():
 
 def test_record_tool_ok_and_error():
     rec = _recorder()
-    rec.record_tool(ClickAction(index=4), 1, 0.2, status="ok", result="a search hit")
-    rec.record_tool(ClickAction(index=7), 2, 0.1, status="error", error="no element 7")
+    rec.record_tool(ClickAction(index=4, memory="note"), 1, 0.2, status="ok", result="a search hit")
+    rec.record_tool(ClickAction(index=7, memory="note"), 2, 0.1, status="error", error="no element 7")
 
     ok, err = rec.observations
     assert isinstance(ok, ToolCall)
@@ -184,7 +185,7 @@ _START_METADATA = dict(
 
 def test_file_tracer_writes_on_finish(tmp_path):
     recording = FileTracer(tmp_path).start(**_START_METADATA)
-    recording.record_tool(ClickAction(index=1), 0, 0.1, status="ok")
+    recording.record_tool(ClickAction(index=1, memory=""), 0, 0.1, status="ok")
     recording.finish(status="success", steps_taken=1, duration=1.0)
 
     loaded = load_traces(tmp_path)
@@ -204,7 +205,7 @@ def test_file_tracer_with_labels_stamps_metadata_and_leaves_original_alone(tmp_p
 
 def test_null_tracer_writes_nothing_and_has_no_trace_id(tmp_path):
     recording = NullTracer().start(**_START_METADATA)
-    recording.record_tool(ClickAction(index=1), 0, 0.1, status="ok")
+    recording.record_tool(ClickAction(index=1, memory=""), 0, 0.1, status="ok")
 
     assert recording.finish(status="success", steps_taken=1, duration=1.0) is None
     assert recording.trace_id is None

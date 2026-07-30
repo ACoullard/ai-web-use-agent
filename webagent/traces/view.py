@@ -150,6 +150,8 @@ def _render_generation(gen: Generation, fmt: str, raw: bool) -> list[str]:
     reasoning = _reasoning_note(gen)
     if reasoning is not None:
         lines.append(f"  reasoning: {reasoning if raw else _truncate(reasoning)}")
+    if gen.memory:
+        lines.append(f"  memory: {gen.memory if raw else _truncate(gen.memory)}")
     output = _as_json(gen.output)
     lines.append(f"  action: {output if raw else _truncate(output)}")
     tokens = f"  tokens: in={gen.input_tokens} out={gen.output_tokens}"

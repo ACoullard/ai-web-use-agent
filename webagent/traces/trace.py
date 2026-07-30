@@ -47,6 +47,7 @@ class Generation(BaseModel):
     input_prompt: str  # the user-facing prompt sent this turn (system prompt lives on Trace)
     reasoning: str | None = None
     reasoning_encrypted: bool = False  # model reasoned but provider returned it encrypted
+    memory: str | None = None
     output: Any = None  # the chosen action / verdict (or attempted output on a failed retry)
     input_tokens: int | None = None
     output_tokens: int | None = None
@@ -212,8 +213,11 @@ class TraceRecorder:
         for i, (req_text, response) in enumerate(pairs):
             is_final = i == len(pairs) - 1
             reasoning, encrypted = _reasoning(response)
+            memory: str | None = None
             if is_final:
                 output = result.output.model_dump(mode="json") if hasattr(result.output, "model_dump") else result.output
+                if isinstance(output, dict):
+                    memory = output.pop("memory", None)
             else:
                 output = _attempted_output(response)
             self.observations.append(
@@ -227,6 +231,7 @@ class TraceRecorder:
                     input_prompt=req_text,
                     reasoning=reasoning,
                     reasoning_encrypted=encrypted,
+                    memory=memory,
                     output=output,
                     input_tokens=response.usage.input_tokens or None,
                     output_tokens=response.usage.output_tokens or None,
@@ -248,6 +253,7 @@ class TraceRecorder:
     ) -> None:
         args = action.model_dump(mode="json")
         args.pop("type", None)
+        args.pop("memory", None)  # agent bookkeeping, not an argument to the browser action
         self.observations.append(
             ToolCall(
                 name=action.type,

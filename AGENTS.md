@@ -21,3 +21,7 @@ loads a `.env` in the working directory at import (real exported vars win over i
 Every `run_task()` records a durable trace of the run, browsable with `webagent trace
 list|show|serve`. The code and its guide live in `webagent/traces/` — see
 `webagent/traces/AGENTS.md` before changing anything about tracing.
+
+A trace's per-step `input_prompt` holds only that turn's observation, not the whole request.
+To see the exact input the model received — system prompt, full history, tool definitions —
+set `TRACE_FULL_INPUT=1`, which writes `$TRACES_DIR/requests/<trace_id>.requests.txt`.

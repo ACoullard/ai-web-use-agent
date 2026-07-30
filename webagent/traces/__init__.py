@@ -1,5 +1,6 @@
 """Durable, human- and AI-legible traces of an agent run."""
 
+from webagent.traces.requests import CapturingModel, render_request
 from webagent.traces.server import serve
 from webagent.traces.trace import (
     FileTracer,
@@ -32,6 +33,8 @@ __all__ = [
     "NullTracer",
     "NullRecording",
     "TraceRecorder",
+    "CapturingModel",
+    "render_request",
     # storage + queries
     "save_trace",
     "load_traces",

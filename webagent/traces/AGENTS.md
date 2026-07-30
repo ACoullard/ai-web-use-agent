@@ -9,6 +9,8 @@ the root `AGENTS.md` only points here.
 - `trace.py` — the whole model and machinery: `Trace`/`Generation`/`ToolCall`, the
   `Tracer`/`Recording` protocols, `FileTracer`/`NullTracer`, `TraceRecorder`, and the
   storage + query helpers (`save_trace`, `load_traces`, `filter_traces`, `find_trace`).
+- `requests.py` — opt-in capture of the exact model input (`CapturingModel`,
+  `render_request`).
 - `view.py` — renders traces for the terminal (`render_list`, `render_trace`).
 - `server.py` — the loopback web browser for traces: routing + a read-only JSON API.
 - `web/` — static assets for that page (`index.html`, `app.js`, `app.css`).
@@ -22,6 +24,11 @@ one JSON file. Following Langfuse's "observation type" idea there are exactly tw
 `Generation` (an LLM call — reasoning, chosen action, tokens) and `ToolCall` (a browser
 action + its result/error). The `finish` action is the final `Generation`'s output, not a
 tool.
+
+`Generation.memory` is the agent's own running progress note, lifted out of the action
+(it's stripped from both `Generation.output` and `ToolCall.args`, where it isn't an
+argument). Because observations age out of the message history, `memory` is the whole of
+what the agent carried forward — read it first when a run loses track of its task.
 
 This is a self-rolled model read straight off the objects the loop already holds
 (`result.new_messages()`, `result.output`, `result.usage()`) — **not** Pydantic AI's
