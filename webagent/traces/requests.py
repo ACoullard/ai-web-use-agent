@@ -111,7 +111,7 @@ def render_request(
 class CapturingModel(WrapperModel):
     """Appends the exact text of every outgoing request to `path`, then forwards it.
 
-    Only constructed when capture is enabled (see `config.request_capture_path`), so there
+    Only constructed when capture is enabled (see `config.capture_full_input`), so there
     is no disabled state to carry: if this object exists, it writes.
     """
 

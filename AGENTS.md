@@ -24,4 +24,4 @@ list|show|serve`. The code and its guide live in `webagent/traces/` — see
 
 A trace's per-step `input_prompt` holds only that turn's observation, not the whole request.
 To see the exact input the model received — system prompt, full history, tool definitions —
-set `TRACE_FULL_INPUT=1`, which writes `$TRACES_DIR/requests/<trace_id>.requests.txt`.
+set `TRACE_FULL_INPUT=true`, which writes `$TRACES_DIR/requests/<trace_id>.requests.txt`.

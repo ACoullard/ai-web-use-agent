@@ -16,7 +16,7 @@ from pydantic_ai.messages import (
 
 from webagent.actions import resolve_action_type
 from webagent.browser import BrowserController, ElementNotFoundError
-from webagent.config import request_capture_path
+from webagent.config import capture_full_input, request_capture_path
 from webagent.output_spec import generic_answer_model, json_schema_to_model, self_check
 from webagent.page_snapshot import PageSnapshot
 from webagent.providers import (
@@ -223,8 +223,9 @@ async def run_task(
     reask_attempts_used = 0
     pending_reask_note: str | None = None
 
-    capture_path = request_capture_path(recording.trace_id) if recording.trace_id else None
-    model_to_run = CapturingModel(model, capture_path, lambda: step) if capture_path else model
+    model_to_run: Any = model
+    if capture_full_input() and recording.trace_id:
+        model_to_run = CapturingModel(model, request_capture_path(recording.trace_id), lambda: step)
 
     agent: Agent[None, Any] = Agent(
         model_to_run,

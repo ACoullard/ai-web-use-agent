@@ -27,7 +27,7 @@ from pydantic_ai.models import ModelRequestParameters
 from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.tools import ToolDefinition
 
-from webagent.config import request_capture_path
+from webagent.config import capture_full_input, request_capture_path
 from webagent.traces import CapturingModel
 
 
@@ -209,22 +209,21 @@ def test_response_is_passed_through_unchanged(tmp_path: Path):
 
 @pytest.mark.parametrize(
     "value,enabled",
-    [("1", True), ("true", True), ("TRUE", True), ("yes", True), ("on", True),
-     ("0", False), ("false", False), ("", False), (None, False)],
+    [("true", True), ("TRUE", True), ("false", False), (None, False)],
 )
-def test_request_capture_path_follows_the_env_var(monkeypatch, tmp_path: Path, value, enabled):
-    monkeypatch.setenv("TRACES_DIR", str(tmp_path))
+def test_capture_full_input_follows_the_env_var(monkeypatch, value, enabled):
     if value is None:
         monkeypatch.delenv("TRACE_FULL_INPUT", raising=False)
     else:
         monkeypatch.setenv("TRACE_FULL_INPUT", value)
 
-    path = request_capture_path("abc123def")
+    assert capture_full_input() is enabled
 
-    if not enabled:
-        assert path is None
-    else:
-        assert path == tmp_path / "requests" / "abc123def.requests.txt"
+
+def test_request_capture_path_sits_under_the_traces_root(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("TRACES_DIR", str(tmp_path))
+
+    assert request_capture_path("abc123def") == tmp_path / "requests" / "abc123def.requests.txt"
 
 
 def test_capture_directory_is_created_on_first_write(tmp_path: Path):
