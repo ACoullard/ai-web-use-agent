@@ -170,7 +170,7 @@ def run(
                 max_reask_attempts=max_reask_attempts,
                 headless=headless,
                 dry_run=dry_run,
-                tracer=FileTracer(trace_dir) if trace else NullTracer(),
+                tracer=FileTracer(trace_dir, live=True) if trace else NullTracer(),
             )
         )
     except ProviderConfigError as e:

@@ -197,7 +197,7 @@ async def run_task(
     recording = (tracer or NullTracer()).start(
         task=task,
         url=url,
-        model=model,
+        model=model if isinstance(model, str) else str(model),
         thinking="off" if thinking is False else thinking if isinstance(thinking, str) else "on",
         output_mode=(
             "schema" if output_schema is not None else "description" if output_description is not None else "freeform"
@@ -356,4 +356,7 @@ async def run_task(
         logger.warning("max_steps_exceeded after %d steps", max_steps)
         return _persist(AgentResult(status="max_steps_exceeded", steps_taken=step))
     finally:
+        recording.finish(
+            status="interrupted", steps_taken=step, duration=time.monotonic() - run_started
+        )
         await browser.close()

@@ -186,11 +186,52 @@ _START_METADATA = dict(
 def test_file_tracer_writes_on_finish(tmp_path):
     recording = FileTracer(tmp_path).start(**_START_METADATA)
     recording.record_tool(ClickAction(index=1, memory=""), 0, 0.1, status="ok")
+    assert load_traces(tmp_path) == []  # nothing on disk until the run is closed
     recording.finish(status="success", steps_taken=1, duration=1.0)
 
     loaded = load_traces(tmp_path)
     assert [t.trace_id for t in loaded] == [recording.trace_id]
     assert loaded[0].task == "find the price"
+
+
+def test_live_tracer_writes_a_snapshot_after_every_observation(tmp_path):
+    recording = FileTracer(tmp_path, live=True).start(**_START_METADATA)
+
+    recording.record_tool(ClickAction(index=1, memory=""), 0, 0.1, status="ok")
+    mid = load_traces(tmp_path)
+    assert [t.status for t in mid] == ["running"]
+    assert len(mid[0].observations) == 1
+
+    recording.record_tool(ClickAction(index=2, memory=""), 1, 0.1, status="ok")
+    mid = load_traces(tmp_path)
+    assert len(mid) == 1  # snapshots overwrite one file, they don't accumulate
+    assert len(mid[0].observations) == 2
+    assert mid[0].steps_taken == 2  # tracks the highest step seen so far
+
+    recording.finish(status="success", steps_taken=2, duration=1.0)
+    final = load_traces(tmp_path)
+    assert [t.status for t in final] == ["success"]
+    assert len(final[0].observations) == 2
+
+
+def test_finish_is_idempotent(tmp_path):
+    """The cleanup path in run_task calls finish() unconditionally, so a run that already
+    returned normally must not have its status overwritten."""
+    recording = FileTracer(tmp_path, live=True).start(**_START_METADATA)
+    recording.record_tool(ClickAction(index=1, memory=""), 0, 0.1, status="ok")
+    first = recording.finish(status="success", steps_taken=1, duration=1.0)
+
+    again = recording.finish(status="interrupted", steps_taken=99, duration=99.0)
+    assert again is first
+    assert load_traces(tmp_path)[0].status == "success"
+
+
+def test_snapshots_stop_once_the_run_is_finished(tmp_path):
+    recording = FileTracer(tmp_path, live=True).start(**_START_METADATA)
+    recording.finish(status="success", steps_taken=0, duration=1.0)
+
+    recording.record_tool(ClickAction(index=1, memory=""), 0, 0.1, status="ok")
+    assert load_traces(tmp_path)[0].status == "success"
 
 
 def test_file_tracer_with_labels_stamps_metadata_and_leaves_original_alone(tmp_path):
@@ -201,6 +242,13 @@ def test_file_tracer_with_labels_stamps_metadata_and_leaves_original_alone(tmp_p
     trace = load_traces(tmp_path)[0]
     assert (trace.run_id, trace.fixture_id) == ("run123", "find-pricing")
     assert base.labels == {}  # deriving a labelled tracer must not mutate its parent
+
+
+def test_with_labels_preserves_live(tmp_path):
+    labelled = FileTracer(tmp_path, live=True).with_labels(run_id="run123")
+    assert labelled.live is True
+    labelled.start(**_START_METADATA).record_tool(ClickAction(index=1, memory=""), 0, 0.1, status="ok")
+    assert load_traces(tmp_path)[0].status == "running"
 
 
 def test_null_tracer_writes_nothing_and_has_no_trace_id(tmp_path):
@@ -229,6 +277,20 @@ def test_save_and_load_round_trip(tmp_path):
     assert len(loaded) == 1
     assert loaded[0].trace_id == trace.trace_id
     assert loaded[0].observations[0].output == {"type": "finish", "answer": "42"}
+
+
+def test_save_trace_overwrites_in_place_and_leaves_no_temp_files(tmp_path):
+    """A live run rewrites one path every step; the temp file the atomic write goes
+    through must never be left behind for load_traces to trip over."""
+    trace = _sample_trace()
+    first = save_trace(trace, tmp_path)
+    trace.status = "success"
+    trace.steps_taken = 7
+    second = save_trace(trace, tmp_path)
+
+    assert first == second
+    assert [p.name for p in tmp_path.iterdir()] == [first.name]
+    assert load_traces(tmp_path)[0].steps_taken == 7
 
 
 def test_load_traces_skips_malformed_files(tmp_path):

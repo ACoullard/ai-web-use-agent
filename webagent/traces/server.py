@@ -14,7 +14,9 @@ import logging
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from webagent.traces.trace import find_trace, load_traces
+from pydantic import ValidationError
+
+from webagent.traces.trace import Trace, find_trace
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +44,60 @@ def _serve_static(name: str) -> tuple[int, str, bytes] | None:
     return 200, _STATIC_TYPES[path.suffix], path.read_bytes()
 
 
+_TRACE_CACHE: dict[Path, tuple[tuple[int, int], Trace]] = {}
+
+
+def clear_cache() -> None:
+    """Drop the parsed-trace cache. For tests; the server never needs it."""
+    _TRACE_CACHE.clear()
+
+
+def _load_traces_cached(directory: Path) -> list[Trace]:
+    """`load_traces`, but re-parsing only the files whose mtime/size changed.
+
+    Without this, every poll would re-parse every trace ever recorded
+    just to serve one. Keyed on (mtime_ns, size); malformed files are skipped, matching
+    `load_traces`.
+    """
+    if not directory.exists():
+        return []
+    traces: list[Trace] = []
+    seen: set[Path] = set()
+    for path in directory.rglob("*.json"):
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        seen.add(path)
+        key = (stat.st_mtime_ns, stat.st_size)
+        cached = _TRACE_CACHE.get(path)
+        if cached is not None and cached[0] == key:
+            traces.append(cached[1])
+            continue
+        try:
+            trace = Trace.model_validate_json(path.read_text(encoding="utf-8"))
+        except (ValidationError, ValueError, OSError):
+            # Windows briefly refuses to open a file while its atomic replace lands, so a
+            # live run is unreadable for a moment every step. Serving the last good parse
+            # keeps it from flickering out of the list; the cache entry keeps its old key,
+            # so the next poll re-parses. Only a file we've never read is dropped, which
+            # is what `load_traces` does with a malformed trace.
+            if cached is not None:
+                traces.append(cached[1])
+            continue
+        _TRACE_CACHE[path] = (key, trace)
+        traces.append(trace)
+    for gone in _TRACE_CACHE.keys() - seen:
+        del _TRACE_CACHE[gone]
+    traces.sort(key=lambda t: t.created_at, reverse=True)
+    return traces
+
+
 def handle_request(trace_dir: Path, path: str) -> tuple[int, str, bytes]:
     """Resolve one GET path to (status, content_type, body). Traces are re-read per request
-    so newly written runs show up on refresh. Lookup is by trace id within the loaded set -
-    never by a client-supplied filesystem path - so there's no path traversal."""
+    (cache-checked against mtime) so a run in progress shows up as it advances. Lookup is by
+    trace id within the loaded set - never by a client-supplied filesystem path - so there's
+    no path traversal."""
     path = path.split("?", 1)[0]
     if path in ("/", "/index.html"):
         return _serve_static("index.html") or (500, "text/plain; charset=utf-8", b"page assets missing")
@@ -57,12 +109,12 @@ def handle_request(trace_dir: Path, path: str) -> tuple[int, str, bytes]:
         return 404, "text/plain; charset=utf-8", b"not found"
 
     if path == _API_PREFIX:
-        summaries = [t.summary() for t in load_traces(trace_dir)]
+        summaries = [t.summary() for t in _load_traces_cached(trace_dir)]
         return 200, "application/json", json.dumps(summaries).encode("utf-8")
 
     if path.startswith(_API_PREFIX + "/"):
         trace_id = path[len(_API_PREFIX) + 1 :]
-        trace = find_trace(load_traces(trace_dir), trace_id)
+        trace = find_trace(_load_traces_cached(trace_dir), trace_id)
         if trace is None:
             return 404, "application/json", b'{"error": "trace not found"}'
         return 200, "application/json", trace.model_dump_json().encode("utf-8")

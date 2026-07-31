@@ -16,6 +16,8 @@ model, not raw spans.
 
 import json
 import logging
+import os
+import time
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -158,6 +160,9 @@ class TraceRecorder:
     Obtained from `Tracer.start()`, which supplies the `persist` hook deciding where the
     finished trace goes (or that it goes nowhere). One instance per run, so concurrent
     runs never share mutable state.
+
+    With `live=True` the run so far is also persisted after every observation, so a viewer
+    can follow it as it happens - see `_snapshot`.
     """
 
     def __init__(
@@ -171,9 +176,13 @@ class TraceRecorder:
         system_prompt: str,
         fixture_id: str | None = None,
         run_id: str | None = None,
+        live: bool = False,
         persist: Callable[[Trace], None] | None = None,
     ) -> None:
         self._persist = persist
+        self._live = live
+        self._started = time.monotonic()
+        self._trace: Trace | None = None  # set once finished; also the idempotency guard
         self.trace_id = uuid.uuid4().hex
         self.created_at = datetime.now(timezone.utc)
         self.task = task
@@ -240,6 +249,7 @@ class TraceRecorder:
                     provider_response_id=response.provider_response_id,
                 )
             )
+        self._snapshot()
 
     def record_tool(
         self,
@@ -265,11 +275,50 @@ class TraceRecorder:
                 error=error,
             )
         )
+        self._snapshot()
+
+    def _steps_seen(self) -> int:
+        """How many steps the run has reached so far, for an in-progress snapshot."""
+        return max((o.step for o in self.observations), default=-1) + 1
+
+    def _snapshot(self) -> None:
+        """Persist the run so far, so a viewer can follow it live.
+
+        Best-effort: a failed snapshot is dropped rather than raised, since the next
+        observation rewrites the whole file anyway and a display concern must never take
+        down the run. The final `finish()` write is not forgiving in the same way.
+        """
+        if not self._live or self._persist is None or self._trace is not None:
+            return
+        try:
+            self._persist(
+                self._build_trace(
+                    status="running",
+                    steps_taken=self._steps_seen(),
+                    duration=time.monotonic() - self._started,
+                )
+            )
+        except OSError as e:
+            logger.debug("live trace snapshot skipped: %s", e)
 
     def finish(self, *, status: str, steps_taken: int, duration: float) -> Trace:
-        """Build the final `Trace` and hand it to the tracer's persist hook (if any)."""
+        """Build the final `Trace` and hand it to the tracer's persist hook (if any).
+
+        Idempotent: once a run is closed, a later call (the cleanup path in `run_task`,
+        which fires unconditionally) returns the trace already built and writes nothing.
+        """
+        if self._trace is not None:
+            return self._trace
+        self._trace = self._build_trace(status=status, steps_taken=steps_taken, duration=duration)
+        if self._persist is not None:
+            self._persist(self._trace)
+        return self._trace
+
+    def _build_trace(self, *, status: str, steps_taken: int, duration: float) -> Trace:
+        """Assemble a `Trace` from the observations so far. Used for both in-progress
+        snapshots and the final record, so the two can never drift apart."""
         generations = [o for o in self.observations if isinstance(o, Generation)]
-        trace = Trace(
+        return Trace(
             trace_id=self.trace_id,
             created_at=self.created_at,
             task=self.task,
@@ -287,9 +336,6 @@ class TraceRecorder:
             system_prompt=self.system_prompt,
             observations=self.observations,
         )
-        if self._persist is not None:
-            self._persist(trace)
-        return trace
 
 
 # --------------------------------------------------------------------------- tracers
@@ -372,28 +418,54 @@ class NullTracer:
 class FileTracer:
     """Tracer that writes each finished trace as one JSON file under `directory`."""
 
-    def __init__(self, directory: Path, **labels: str | None) -> None:
+    def __init__(self, directory: Path, *, live: bool = False, **labels: str | None) -> None:
         self.directory = directory
+        self.live = live
         self.labels = {k: v for k, v in labels.items() if v is not None}
 
     def start(self, **metadata: Any) -> Recording:
-        return TraceRecorder(**metadata, **self.labels, persist=self._save)
+        return TraceRecorder(**metadata, **self.labels, live=self.live, persist=self._save)
 
     def with_labels(self, **labels: str | None) -> "FileTracer":
-        return FileTracer(self.directory, **{**self.labels, **labels})
+        return FileTracer(self.directory, live=self.live, **{**self.labels, **labels})
 
     def _save(self, trace: Trace) -> None:
-        logger.info("trace saved to %s", save_trace(trace, self.directory))
+        path = save_trace(trace, self.directory)
+        if trace.status != "running":  # don't log once per snapshot of a live run
+            logger.info("trace saved to %s", path)
 
 
 # --------------------------------------------------------------------------- storage
 
 
+_REPLACE_ATTEMPTS = 3
+_REPLACE_BACKOFF_SECONDS = 0.01
+
+
 def save_trace(trace: Trace, directory: Path) -> Path:
-    """Write `trace` as one pretty-printed JSON file and return its path."""
+    """Write `trace` as one pretty-printed JSON file and return its path.
+
+    Written temp-then-rename rather than in place: a live run rewrites this file every
+    step while the trace web page reads it, and `load_traces` silently skips a file it
+    can't parse. An atomic replace means a reader sees either the previous snapshot or
+    the new one, never a half-written run that vanishes from the list.
+    """
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{trace.created_at:%Y%m%dT%H%M%S}-{trace.trace_id[:8]}.json"
-    path.write_text(trace.model_dump_json(indent=2), encoding="utf-8")
+    # not a .json suffix, or load_traces' rglob would try to parse the temp file
+    tmp = path.with_suffix(f".{os.getpid()}.tmp")
+    tmp.write_text(trace.model_dump_json(indent=2), encoding="utf-8")
+    for attempt in range(_REPLACE_ATTEMPTS):
+        try:
+            os.replace(tmp, path)
+            return path
+        except PermissionError:
+            # Windows won't replace a file a reader currently holds open. That window is
+            # sub-millisecond (one small read), so a short retry clears it.
+            if attempt == _REPLACE_ATTEMPTS - 1:
+                tmp.unlink(missing_ok=True)
+                raise
+            time.sleep(_REPLACE_BACKOFF_SECONDS)
     return path
 
 

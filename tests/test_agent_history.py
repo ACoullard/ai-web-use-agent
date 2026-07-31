@@ -282,3 +282,45 @@ async def test_loop_keeps_system_prompt_and_windows_observations(monkeypatch):
 
     # The memory trail survives in full, which is what makes the stubbing safe.
     assert seen[-1]["memories"] == [f"step {n}, {n} of 2 products" for n in range(1, 5)]
+
+
+@pytest.mark.anyio
+async def test_a_crashed_run_still_persists_its_trace(tmp_path, monkeypatch):
+    """A run that dies mid-loop used to persist nothing at all: `_persist` sat on the
+    return paths only. The cleanup path now closes the recording, so the steps that did
+    happen survive - which is also what lets a live viewer see where a run died."""
+    from pydantic_ai.models.function import AgentInfo, FunctionModel
+
+    from webagent import agent as agent_module
+    from webagent.traces import FileTracer, load_traces
+
+    class _ExplodingBrowser(_FakeBrowser):
+        async def execute(self, action):
+            raise RuntimeError("browser died")  # not one of the errors the loop handles
+
+    def respond(messages, info: AgentInfo) -> ModelResponse:
+        return ModelResponse(
+            parts=[ToolCallPart("final_result_ClickAction", {"type": "click", "index": 1, "memory": "m"})]
+        )
+
+    async def fake_launch(headless: bool = True):
+        return _ExplodingBrowser()
+
+    monkeypatch.setattr(agent_module.BrowserController, "launch", staticmethod(fake_launch))
+    monkeypatch.setattr(agent_module, "check_model_config", lambda model: None)
+    monkeypatch.setattr(agent_module, "build_model_settings", lambda model, thinking: None)
+
+    with pytest.raises(RuntimeError, match="browser died"):
+        await agent_module.run_task(
+            task="add exactly 2 products",
+            url="https://example.com/",
+            model=FunctionModel(respond),
+            thinking=False,
+            max_steps=10,
+            tracer=FileTracer(tmp_path, live=True),
+        )
+
+    traces = load_traces(tmp_path)
+    assert [t.status for t in traces] == ["interrupted"]
+    # the generation that chose the doomed action is still there
+    assert [o.type for o in traces[0].observations] == ["generation"]

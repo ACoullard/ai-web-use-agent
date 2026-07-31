@@ -14,6 +14,12 @@ tbody tr:hover { background: #8881; cursor: pointer; }
 td.task span { display: block; max-width: 60ch; overflow: hidden; text-overflow: ellipsis; }
 .status-success { color: #16a34a; }
 .status-validation_failed, .status-max_steps_exceeded, .status-error { color: #dc2626; }
+.status-running, .status-interrupted { color: #d97706; }
+/* a run still in progress: the page is polling and will append steps as they land */
+.live-badge { color: #d97706; font-weight: 600; }
+.live-badge::before { content: "●"; margin-right: .3em; animation: pulse 1.4s ease-in-out infinite; display: inline-block; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .live-badge::before { animation: none; } }
 .muted { opacity: .65; }
 .step { border: 1px solid #8884; border-radius: 6px; margin: .75rem 0; }
 .step > .step-hd { padding: .4rem .7rem; font-weight: 600; background: #8881; }

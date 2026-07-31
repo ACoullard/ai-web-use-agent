@@ -1,12 +1,23 @@
 import json
 from datetime import datetime, timezone
+from pathlib import Path
+
+import pytest
 
 from webagent.traces import Generation, Trace, save_trace
-from webagent.traces.server import handle_request, make_server
+from webagent.traces.server import clear_cache, handle_request, make_server
 
 
-def _write_trace(directory):
-    trace = Trace(
+@pytest.fixture(autouse=True)
+def _clean_trace_cache():
+    """The parsed-trace cache is module state; keep it from leaking across tests."""
+    clear_cache()
+    yield
+    clear_cache()
+
+
+def _write_trace(directory, **overrides):
+    fields = dict(
         trace_id="feedface0000",
         created_at=datetime(2026, 7, 24, 9, 0, tzinfo=timezone.utc),
         task="find pricing",
@@ -21,6 +32,8 @@ def _write_trace(directory):
                        input_prompt="p", output={"type": "finish", "answer": "42"})
         ],
     )
+    fields.update(overrides)
+    trace = Trace(**fields)
     save_trace(trace, directory)
     return trace
 
@@ -83,6 +96,61 @@ def test_api_single_trace_accepts_prefix(tmp_path):
 def test_api_unknown_trace_404(tmp_path):
     status, _, _ = handle_request(tmp_path, "/api/traces/does-not-exist")
     assert status == 404
+
+
+def test_rewritten_trace_is_re_read_not_served_stale(tmp_path):
+    """The whole point of polling: a live run rewrites its file every step, and both
+    endpoints have to show the new content rather than a cached parse."""
+    _write_trace(tmp_path, status="running", steps_taken=1)
+    assert json.loads(handle_request(tmp_path, "/api/traces")[2])[0]["status"] == "running"
+
+    _write_trace(tmp_path, status="running", steps_taken=2, observations=[
+        Generation(name="decide_action", step=0, duration_seconds=1.0, model="test:model",
+                   input_prompt="p", output={"type": "click", "index": 3}),
+        Generation(name="decide_action", step=1, duration_seconds=1.0, model="test:model",
+                   input_prompt="p", output={"type": "finish", "answer": "42"}),
+    ])
+    summary = json.loads(handle_request(tmp_path, "/api/traces")[2])[0]
+    assert summary["steps_taken"] == 2
+    detail = json.loads(handle_request(tmp_path, "/api/traces/feedface0000")[2])
+    assert len(detail["observations"]) == 2
+
+
+def test_a_momentarily_unreadable_trace_falls_back_to_the_last_good_parse(tmp_path, monkeypatch):
+    """Windows refuses to open a file while its atomic replace lands, so a live run is
+    briefly unreadable every step. Dropping it would make the run flicker out of the
+    list mid-poll; the cached parse covers the gap."""
+    _write_trace(tmp_path, status="running", steps_taken=3)
+    assert json.loads(handle_request(tmp_path, "/api/traces")[2])[0]["steps_taken"] == 3
+
+    real_read_text = Path.read_text
+
+    def deny(self, *args, **kwargs):
+        if self.suffix == ".json":
+            raise PermissionError("being replaced")
+        return real_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", deny)
+    # the file's mtime is untouched, so force a re-parse attempt by invalidating the key
+    Path(next(tmp_path.glob("*.json"))).touch()
+    assert json.loads(handle_request(tmp_path, "/api/traces")[2])[0]["steps_taken"] == 3
+
+
+def test_an_unreadable_trace_never_parsed_is_skipped(tmp_path):
+    """The fallback only covers files we've read before - a genuinely malformed trace is
+    still skipped, as load_traces does."""
+    _write_trace(tmp_path)
+    (tmp_path / "junk.json").write_text("not json", encoding="utf-8")
+    assert len(json.loads(handle_request(tmp_path, "/api/traces")[2])) == 1
+
+
+def test_deleted_trace_is_dropped_from_the_cache(tmp_path):
+    trace = _write_trace(tmp_path)
+    assert len(json.loads(handle_request(tmp_path, "/api/traces")[2])) == 1
+
+    next(tmp_path.glob("*.json")).unlink()
+    assert json.loads(handle_request(tmp_path, "/api/traces")[2]) == []
+    assert handle_request(tmp_path, f"/api/traces/{trace.trace_id}")[0] == 404
 
 
 def test_unknown_path_404(tmp_path):

@@ -44,6 +44,10 @@ observations into. The tracer decides whether anything is persisted and where.
 
 - `FileTracer(dir)` writes one JSON file per run. `NullTracer` drops everything, so the
   loop body needs no `if tracing` branches and `Recording.trace_id` is `None`.
+- `FileTracer(dir, live=True)` also decides *how often*: it rewrites the same file after
+  every observation, so `trace serve` can follow a run in progress. `webagent run` turns
+  this on; the eval harness leaves it off, because `run_suite` runs fixtures concurrently
+  and would multiply the writes for nobody to watch.
 - `tracer.with_labels(...)` derives a *new* tracer carrying extra filterable metadata
   (never mutates the original). The eval harness stamps `run_id` once at suite level and
   `fixture_id` per fixture — which is why neither appears in `run_task()`'s signature.
@@ -62,6 +66,21 @@ collection. Filenames are `<timestamp>-<trace_id[:8]>.json`, which sorts chronol
 The two `FileTracer(...)` construction sites in `webagent/cli.py` and `evals/cli.py` are the
 only places a trace directory is named.
 
+Because the filename is derived from `created_at` + `trace_id` - both fixed when the
+recorder is built - a live run's snapshots all overwrite one path, and the on-disk format
+is the same whole-`Trace` JSON either way. Nothing that reads traces needs to know a run
+was watched live. `save_trace` writes temp-then-`os.replace` so a reader never sees a
+half-written file (on Windows the replace can lose a race with an open reader, hence the
+short retry).
+
+## Statuses
+
+`Trace.status` is a plain `str`, not a `Literal`, and carries two values `AgentResult`
+never has: `running` while a live run is in progress, and `interrupted` for a run that
+died before reaching a return path. The latter comes from `run_task`'s `finally`, which
+calls `finish()` unconditionally - `finish()` is idempotent, so it's a no-op on every
+normal exit and only bites on a crash or Ctrl-C, which used to persist nothing at all.
+
 ## Browsing
 
 - `webagent trace list [--task/--model/--thinking/--status/--fixture/--run] [--format human|agent]`
@@ -69,5 +88,15 @@ only places a trace directory is named.
 - `webagent trace serve` — loopback-only website to filter runs and drill into steps. Assets
   are read per request, so a browser refresh picks up edits to `web/`; `server.py` is only
   routing and the JSON API.
+
+The page polls: the list every 2s, an open run's detail view every 1s, stopping as soon as
+the run reaches a terminal status. A live detail view appends only the observations it
+hasn't seen (they're append-only), so expanded panels and scroll position survive; new
+cards arrive expanded and the page follows the newest step unless you've scrolled up.
+Run `webagent run --no-headless` beside it to watch the agent reason and act in real time.
+
+`server.py` caches parsed traces on `(mtime_ns, size)` — at 1 Hz, re-parsing every trace on
+disk to serve one is the difference between free and not. A file that briefly fails to open
+(Windows, mid-replace) falls back to its last good parse rather than vanishing from the list.
 
 `--format agent` emits markdown built for an LLM to read when iterating on prompts.
