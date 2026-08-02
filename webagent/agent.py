@@ -15,7 +15,7 @@ from pydantic_ai.messages import (
 )
 
 from webagent.actions import resolve_action_type
-from webagent.browser import BrowserController, ElementNotFoundError
+from webagent.browser import BrowserController, ElementActionError
 from webagent.config import capture_full_input, request_capture_path
 from webagent.output_spec import generic_answer_model, json_schema_to_model, self_check
 from webagent.page_snapshot import PageSnapshot
@@ -334,16 +334,12 @@ async def run_task(
                 recording.record_tool(
                     action, step, time.monotonic() - tool_started, status="ok", result=action_result
                 )
-            except ElementNotFoundError as e:
+            except ElementActionError as e:
                 recording.record_tool(
                     action, step, time.monotonic() - tool_started, status="error", error=str(e)
                 )
                 logger.warning("step %d action %r failed: %s", step, action, e)
-                pending_reask_note = (
-                    f"Your last action ({action!r}) failed: {e} "
-                    "The index you used no longer refers to anything - re-check the "
-                    "observation below before trying again."
-                )
+                pending_reask_note = f"Your last action ({action!r}) failed: {e} {e.advice}"
             except PlaywrightError as e:
                 recording.record_tool(
                     action, step, time.monotonic() - tool_started, status="error", error=str(e)

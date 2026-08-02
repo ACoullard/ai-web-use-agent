@@ -1,10 +1,16 @@
 import asyncio
+import time
 from contextlib import asynccontextmanager
 
 import pytest
 
 from webagent.actions import ClickAction, ReadMoreTextAction, SearchPageTextAction, TypeAction
-from webagent.browser import TEXT_SUMMARY_CHARS, BrowserController, ElementNotFoundError
+from webagent.browser import (
+    TEXT_SUMMARY_CHARS,
+    BrowserController,
+    ElementBlockedError,
+    ElementNotFoundError,
+)
 
 
 @asynccontextmanager
@@ -177,6 +183,109 @@ def test_observe_detects_aria_modal_and_leaves_its_controls_clickable(tmp_path):
             # the dialog's own button sits on top and stays clickable.
             assert background.occluded is True
             assert accept.occluded is False
+
+    asyncio.run(_test())
+
+
+def test_observe_sees_a_modal_the_click_opened_asynchronously(tmp_path):
+    """The regression this targets: a click whose handler fetches, then opens a modal.
+
+    That fires no navigation, so the document's lifecycle events never move and
+    wait_for_load_state("networkidle") returns without waiting. An observation taken then
+    shows the pre-modal page - no modal buttons, nothing flagged as covered - and the
+    model's next click lands on an element the modal has since covered.
+    """
+
+    async def _test():
+        async with _launched_browser() as browser:
+            # The fetch stands in for the site's add-to-cart XHR: the DOM holds still
+            # for as long as it is in flight, and only mutates once it resolves. Served
+            # from the route below rather than the network, so the delay is exact.
+            async def _slow_add_to_cart(route):
+                await asyncio.sleep(0.4)
+                await route.fulfill(
+                    status=200, body="{}", headers={"Access-Control-Allow-Origin": "*"}
+                )
+
+            await browser._page.route("**/add-to-cart", _slow_add_to_cart)
+
+            html_path = tmp_path / "async_modal.html"
+            html_path.write_text(
+                """
+                <button id="add">Add to cart</button>
+                <script>
+                  document.getElementById('add').addEventListener('click', () => {
+                    fetch('http://cart.test/add-to-cart').then(() => setTimeout(() => {
+                      const d = document.createElement('div');
+                      d.setAttribute('role', 'dialog');
+                      d.setAttribute('aria-label', 'Added');
+                      d.style.cssText =
+                        'position:fixed; inset:0; z-index:10; background:white';
+                      const b = document.createElement('button');
+                      b.textContent = 'Continue Shopping';
+                      d.appendChild(b);
+                      document.body.appendChild(d);
+                    }, 150));
+                  });
+                </script>
+                """
+            )
+            await browser.goto(html_path.as_uri())
+            observation = await browser.observe()
+            await browser.execute(ClickAction(index=_button_index(observation), memory=""))
+
+            after = await browser.observe()
+            names = {el.name for el in after.elements}
+            assert "Continue Shopping" in names, "observation was taken before the modal opened"
+            assert after.modal_present is True
+            assert "Added" in after.modal_description
+
+            add_button = next(el for el in after.elements if el.name == "Add to cart")
+            assert add_button.occluded is True
+
+    asyncio.run(_test())
+
+
+def test_click_refuses_immediately_when_something_covers_the_element(tmp_path):
+    async def _test():
+        async with _launched_browser() as browser:
+            html_path = tmp_path / "blocked.html"
+            html_path.write_text(
+                "<button id='target'>Target</button>"
+                "<div id='cover' class='modal show' style='position:fixed; top:0; left:0; "
+                "width:100%; height:100%; z-index:9999; background:white'>cover</div>"
+            )
+            await browser.goto(html_path.as_uri())
+            observation = await browser.observe()
+            index = next(el.index for el in observation.elements if el.name == "Target")
+
+            started = time.monotonic()
+            with pytest.raises(ElementBlockedError) as excinfo:
+                await browser.execute(ClickAction(index=index, memory=""))
+            elapsed = time.monotonic() - started
+
+            # The point of refusing up front: Playwright would retry the intercepted
+            # click for its full actionability timeout before reporting anything.
+            assert elapsed < 5
+            assert excinfo.value.occluder == "<div#cover.modal.show>"
+            assert "covered by <div#cover.modal.show>" in str(excinfo.value)
+
+    asyncio.run(_test())
+
+
+def test_click_proceeds_when_the_overlay_does_not_take_clicks(tmp_path):
+    async def _test():
+        async with _launched_browser() as browser:
+            html_path = tmp_path / "decorative.html"
+            html_path.write_text(
+                "<button onclick=\"document.title = 'clicked'\">Click me</button>"
+                "<div style='position:fixed; top:0; left:0; width:100%; height:100%; "
+                "z-index:9999; pointer-events:none; background:rgba(0,0,0,0.1)'></div>"
+            )
+            await browser.goto(html_path.as_uri())
+            observation = await browser.observe()
+            await browser.execute(ClickAction(index=_button_index(observation), memory=""))
+            assert await browser._page.title() == "clicked"
 
     asyncio.run(_test())
 
