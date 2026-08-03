@@ -304,6 +304,131 @@ def test_type_action_roundtrip(tmp_path):
     asyncio.run(_test())
 
 
+def test_observe_identifies_form_controls_with_no_accessible_name(tmp_path):
+    """A label that neither wraps its input nor carries a matching `for` names nothing.
+
+    This is how automationexercise.com's payment form is written, and it left every
+    field arriving as an indistinguishable `<input> ''` for the agent to guess between.
+    """
+
+    async def _test():
+        async with _launched_browser() as browser:
+            html_path = tmp_path / "unlabelled.html"
+            html_path.write_text(
+                "<div><label>Name on Card</label>"
+                "<input name='name_on_card' data-qa='name-on-card' required type='text'></div>"
+                "<div><label>Card Number</label>"
+                "<input name='card_number' data-qa='card-number' required type='text'></div>"
+            )
+            await browser.goto(html_path.as_uri())
+            observation = await browser.observe()
+
+            fields = [el for el in observation.elements if el.tag == "input"]
+            assert [el.name for el in fields] == ["", ""]
+            assert [el.field for el in fields] == ["name_on_card", "card_number"]
+
+            line = fields[0].to_prompt_line()
+            assert "field='name_on_card'" in line
+            assert "type=text" in line
+            assert "required" in line
+
+    asyncio.run(_test())
+
+
+def test_observe_falls_back_through_the_identifier_attributes(tmp_path):
+    async def _test():
+        async with _launched_browser() as browser:
+            html_path = tmp_path / "identifiers.html"
+            html_path.write_text(
+                "<input data-qa='by-data-qa'>"
+                "<input data-testid='by-data-testid'>"
+                "<input id='by-id'>"
+                "<input autocomplete='street-address'>"
+                "<input>"
+            )
+            await browser.goto(html_path.as_uri())
+            observation = await browser.observe()
+
+            assert [el.field for el in observation.elements] == [
+                "by-data-qa",
+                "by-data-testid",
+                "by-id",
+                "street-address",
+                None,
+            ]
+
+    asyncio.run(_test())
+
+
+def test_observe_reports_input_type_and_toggle_state(tmp_path):
+    """Without a type, a checkbox reads as a text box - and the agent tries to fill it."""
+
+    async def _test():
+        async with _launched_browser() as browser:
+            html_path = tmp_path / "types.html"
+            html_path.write_text(
+                "<input type='checkbox' name='newsletter' value='1'>"
+                "<input type='checkbox' name='optin' value='1' checked>"
+                "<input type='radio' name='id_gender' value='Mr'>"
+                "<input type='password' name='password'>"
+                "<input name='untyped'>"
+                "<button disabled>Pay</button>"
+            )
+            await browser.goto(html_path.as_uri())
+            observation = await browser.observe()
+            by_index = {el.index: el for el in observation.elements}
+
+            assert [by_index[i].input_type for i in (1, 2, 3, 4, 5)] == [
+                "checkbox",
+                "checkbox",
+                "radio",
+                "password",
+                "text",
+            ]
+            assert [by_index[i].checked for i in (1, 2, 3)] == [False, True, False]
+            # Only toggles carry a checked state; other controls must not imply one.
+            assert by_index[4].checked is None
+
+            assert "unchecked" in by_index[1].to_prompt_line()
+            assert "checked" in by_index[2].to_prompt_line()
+            assert by_index[6].disabled is True
+            assert "disabled" in by_index[6].to_prompt_line()
+
+    asyncio.run(_test())
+
+
+def test_observe_reports_aria_disabled_control(tmp_path):
+    async def _test():
+        async with _launched_browser() as browser:
+            html_path = tmp_path / "aria_disabled.html"
+            html_path.write_text("<a role='button' aria-disabled='true'>Continue</a>")
+            await browser.goto(html_path.as_uri())
+            observation = await browser.observe()
+
+            assert observation.elements[0].disabled is True
+
+    asyncio.run(_test())
+
+
+def test_observe_leaves_non_form_elements_unannotated(tmp_path):
+    """The new attributes are scoped to form controls - links must not grow a field=."""
+
+    async def _test():
+        async with _launched_browser() as browser:
+            html_path = tmp_path / "link.html"
+            html_path.write_text("<a id='home' href='https://example.com/'>Home</a>")
+            await browser.goto(html_path.as_uri())
+            observation = await browser.observe()
+
+            link = observation.elements[0]
+            assert link.field is None
+            assert link.input_type is None
+            assert link.checked is None
+            assert link.to_prompt_line() == "[1] <a> 'Home' href='https://example.com/'"
+
+    asyncio.run(_test())
+
+
 def _long_text_html(total_chars: int) -> str:
     body = "".join(f"word{i} " for i in range(total_chars // 7 + 1))[:total_chars]
     return f"<body>{body}</body>"

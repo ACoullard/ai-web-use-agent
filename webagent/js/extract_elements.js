@@ -1,5 +1,6 @@
 (maxSummaryChars) => {
   const interactiveTags = new Set(['a', 'button', 'input', 'select', 'textarea']);
+  const formTags = new Set(['input', 'select', 'textarea']);
   const interactiveRoles = new Set([
     'button', 'link', 'checkbox', 'radio', 'tab', 'menuitem', 'option', 'switch', 'textbox',
   ]);
@@ -86,6 +87,14 @@
     return text.trim().slice(0, 120);
   }
 
+  function fieldIdentifier(el) {
+    for (const attr of ['name', 'data-qa', 'data-testid', 'id', 'autocomplete']) {
+      const raw = el.getAttribute(attr);
+      if (raw && raw.trim()) return raw.trim().slice(0, 60);
+    }
+    return null;
+  }
+
   // Drop the previous observation's handles - stale entries here would resolve to
   // detached nodes that are no longer on the page.
   window.__webagentElements = [];
@@ -100,18 +109,27 @@
     index += 1;
     window.__webagentElements[index] = el;
     const tag = el.tagName.toLowerCase();
+    const isFormControl = formTags.has(tag);
+    // el.type normalizes a missing or unrecognized type attribute to 'text'.
+    const inputType = tag === 'input' ? el.type : null;
+    const isToggle = inputType === 'checkbox' || inputType === 'radio';
     const occludedBy = occludingTag(el, el.getBoundingClientRect());
     elements.push({
       index,
       tag,
       role: el.getAttribute('role') || null,
+      input_type: inputType,
       name: accessibleName(el),
       value: 'value' in el ? (el.value || null) : null,
+      field: isFormControl ? fieldIdentifier(el) : null,
       // el.href resolves to an absolute URL; the raw attribute may be relative.
       href: tag === 'a' && el.href ? el.href : null,
       options: tag === 'select'
         ? Array.from(el.options).map((o) => ({ value: o.value, label: o.text.trim() }))
         : null,
+      checked: isToggle ? el.checked : null,
+      required: isFormControl && !!el.required,
+      disabled: ('disabled' in el && !!el.disabled) || el.getAttribute('aria-disabled') === 'true',
       occluded: occludedBy !== null,
       occluded_by: occludedBy,
     });

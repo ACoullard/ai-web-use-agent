@@ -10,28 +10,43 @@ class ElementInfo(BaseModel):
     index: int
     tag: str
     role: str | None = None
+    input_type: str | None = None
     name: str
     value: str | None = None
+    field: str | None = None
     href: str | None = None
     options: list[SelectOption] | None = None
+    checked: bool | None = None
+    required: bool = False
+    disabled: bool = False
     occluded: bool = False
     occluded_by: str | None = None
 
     def to_prompt_line(self) -> str:
+        type_part = f" type={self.input_type}" if self.input_type else ""
         role_part = f" role={self.role}" if self.role else ""
         value_part = f" value={self.value!r}" if self.value else ""
+        field_part = f" field={self.field!r}" if self.field else ""
         href_part = f" href={self.href!r}" if self.href else ""
         options_part = ""
         if self.options:
             rendered = ", ".join(f"{o.value!r} ({o.label})" for o in self.options)
             options_part = f" options=[{rendered}]"
+        flags = []
+        if self.checked is not None:
+            flags.append("checked" if self.checked else "unchecked")
+        if self.required:
+            flags.append("required")
+        if self.disabled:
+            flags.append("disabled")
+        flags_part = f" {' '.join(flags)}" if flags else ""
         occluded_part = ""
         if self.occluded:
             covered_by = f" by <{self.occluded_by}>" if self.occluded_by else ""
             occluded_part = f" (covered{covered_by} - a click here would likely be intercepted)"
         return (
-            f"[{self.index}] <{self.tag}>{role_part} {self.name!r}"
-            f"{value_part}{href_part}{options_part}{occluded_part}"
+            f"[{self.index}] <{self.tag}{type_part}>{role_part} {self.name!r}"
+            f"{value_part}{field_part}{href_part}{options_part}{flags_part}{occluded_part}"
         )
 
 
